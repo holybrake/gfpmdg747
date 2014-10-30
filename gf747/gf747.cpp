@@ -4,11 +4,12 @@
 #include <SimConnect.h>
 
 #include <iostream>
-#include <string.h>
+#include <cstring>
+#include <cstdio>
 #include <iomanip>
 #include <map>
-#include "GFDevApi.h"
-
+#define _WINDOWS
+#include <GFDevApi.h>
 
 
 enum data_definition_id
@@ -24,7 +25,8 @@ enum client_data_id
 };
 
 enum DATA_REQUEST_ID {
-    REQUEST_DATA,
+    REQUEST_APDATA,
+	REQUEST_DATA,
 	REQUEST_VISIBLE,
     REQUEST_LED
 };
@@ -50,11 +52,14 @@ class mcppro_display_747
     int last_vs;
     int last_panel_state;
     int last_mach_ias;
+	int last_ap_vs;
     double last_mach;
     bool hdg_changed;
     bool alt_changed;
     bool vs_changed;
     bool mach_ias_changed;
+	bool ias_changed;
+	bool mach_changed;
     bool panel_state_changed;
     unsigned long ulIndicatorState;
     bool spd_display_on;
@@ -63,23 +68,23 @@ class mcppro_display_747
     static unsigned set_indicator_by_panel_state(unsigned panel_state)
     {
 // panel state bitmask(0=ap L,1=ap R,2=ap C,3=ap dis,4=f/d,5=fo f/d,6=a/t,7=thr,8=spd,9=flch,10=vnav,11=lnav,12=loc,13=app,15=althld,16=v/s,19=hdghold,25=spddisplay,27=v/sdisplay )
-//          0x00000001 apL
+//          0x00000001 apL  //0
 //          0x00000002 apR
 //          0x00000004 apC
 //          0x00000008 apDis
 //          0x00000010 fdL
-//          0x00000020 fdR
+//          0x00000020 fdR // 5
 //          0x00000040 at
 //          0x00000080 thr
 //          0x00000100 spd
 //          0x00000200 flch
-//          0x00000400 vnav
+//          0x00000400 vnav //10
 //          0x00000800 lnav
 //          0x00001000 loc
 //          0x00002000 app
-//          0x00004000 althld
-//          0x00008000 vs
-//          0x00010000
+//          0x00004000 
+//          0x00008000 althld    //15
+//          0x00010000 vs    //16
 //          0x00020000
 //          0x00040000
 //          0x00080000 hdghold
@@ -99,12 +104,14 @@ class mcppro_display_747
          return  ((panel_state & 0x03u) << 2) // apL apR
                 | ((panel_state & 0x0C00u) >> 10)   // vnav lnav
                 | ((panel_state & 0x04u) << 7) // apC
+				| ((panel_state & 0x00000040u) >> 2 ) // at
                 | ((panel_state & 0x010u) << 10 ) // fdL
                 | ((panel_state & 0x020u) << 18 ) // fdR
-                | ((panel_state & 0x0380u) << 4 ) // thr spd flch
+                | ((panel_state & 0x0380u) << 8 ) // thr spd flch
                 | ((panel_state & 0x01000u) >> 5) // loc
-                | ((panel_state & 0x0E000u) << 6) // app althld vs
-                | ((panel_state & 0x080000u) << 1) // hdg
+                | ((panel_state & 0x02000u) << 6) // app
+				| ((panel_state & 0x018000u) << 5) //  althld vs
+                | ((panel_state & 0x080000u) >> 1) // hdg
                 ;
 
     }
@@ -119,10 +126,13 @@ public:
           ,last_panel_state(0)
           ,last_mach_ias(0)
           ,last_mach(0.0)
+		  ,last_ap_vs(0)
           ,hdg_changed(false)
           ,alt_changed(false)
           ,vs_changed(false)
           ,mach_ias_changed(false)
+		  ,ias_changed(false)
+		  ,mach_changed(false)
           ,panel_state_changed(false)
           ,ulIndicatorState(0ul), spd_display_on(false), vs_display_on(false)
     {
@@ -142,7 +152,7 @@ public:
         if (arg != last_ias)
         {
             last_ias = arg;
-            mach_ias_changed = true;
+            ias_changed = true;
         }
     }
 
@@ -160,9 +170,15 @@ public:
         if (arg != last_vs)
         {
             last_vs = arg;
-            vs_changed = true;
+            vs_changed = vs_display_on;
         }
     }
+
+    void set_ap_vs(int arg)
+    {
+		last_ap_vs = arg;
+    }
+
 
     void set_panel_state(int arg)
     {
@@ -206,7 +222,7 @@ public:
         if (std::abs(arg - last_mach) > 0.005 )
         {
             last_mach = arg;
-            mach_ias_changed = true;
+            mach_changed = true;
         }
     }
     void invalidate()
@@ -221,22 +237,28 @@ public:
     void update_mcppro(int devnum)
     {
         char szNumericMsg[8] = {0};
-        if (mach_ias_changed)
+		//std::cout << spd_display_on << " " << last_mach << " " << last_ias << std::endl;
+		if (mach_ias_changed || mach_changed || ias_changed)
         {
-            if (!spd_display_on)
-            {
-                sprintf( szNumericMsg, " .    ");
-            }
-            else if (last_mach_ias == 1 )
-            {
-                sprintf( szNumericMsg, " %04.2f", last_mach);
-            }
-            else
-            {
-                sprintf( szNumericMsg, " %3d", last_ias);
-            }
-            GFMCPPro_SetBDisplayText(devnum, szNumericMsg);
-            mach_ias_changed = false;
+			if (mach_ias_changed || (!((last_mach_ias && ias_changed) || (!last_mach_ias && mach_changed)) && spd_display_on))
+			{
+				if (!spd_display_on )
+				{
+					sprintf( szNumericMsg, "     ");
+				}
+				else if (last_mach_ias )
+				{
+					sprintf( szNumericMsg, "%05.3f", last_mach);
+				}
+				else
+				{
+					sprintf( szNumericMsg, " %3d", last_ias);
+				}
+				GFMCPPro_SetBDisplayText(devnum, szNumericMsg);
+			}
+			mach_ias_changed = false;
+			ias_changed = false;
+			mach_changed = false;
         }
 
         if (hdg_changed)
@@ -249,19 +271,19 @@ public:
         {
             if (!vs_display_on)
             {
-                sprintf( szNumericMsg, " .    ");
+                sprintf( szNumericMsg, "     ");
             }
             else
             {
-                sprintf( szNumericMsg, "%+04d", last_vs);
+                sprintf( szNumericMsg, "%+05d", last_vs);
             }
-            GFMCPPro_SetDDisplayText(devnum, szNumericMsg);
+            GFMCPPro_SetEDisplayText(devnum, szNumericMsg);
             vs_changed = false;
         }
         if (alt_changed)
         {
             sprintf( szNumericMsg, "%05d", last_alt);
-            GFMCPPro_SetEDisplayText(devnum, szNumericMsg);
+            GFMCPPro_SetDDisplayText(devnum, szNumericMsg);
             alt_changed = false;
         }
         if (panel_state_changed)
@@ -357,7 +379,7 @@ enum sim_events
     MCPSetVS,
     MCPSetFDL,
     MCPSetFDR
-}
+};
 
 enum sim_data
 {
@@ -374,90 +396,92 @@ enum sim_data
     MCPAlt,
     MCPVS,
     MCPPanelState,
-    MACH_IAS
-}
+    MACH_IAS,
+	AP_BANK_LIM,
+	AP_VS
+};
 
 
 void map_747_events(HANDLE hSimConnect)
 {
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressMINS,       "PMDG.747-400.EFIS Captain.Press MINS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseMINS,    "PMDG.747-400.EFIS Captain.Increase MINS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseMINS,    "PMDG.747-400.EFIS Captain.Decrease MINS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainResetMINS,       "PMDG.747-400.EFIS Captain.Reset MINS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressBARO,       "PMDG.747-400.EFIS Captain.Press BARO");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseBARO,    "PMDG.747-400.EFIS Captain.Increase BARO");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseBARO,    "PMDG.747-400.EFIS Captain.Decrease BARO");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressBAROSTD,    "PMDG.747-400.EFIS Captain.Press BARO STD");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressFPV,        "PMDG.747-400.EFIS Captain.Press FPV");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressMTRS,       "PMDG.747-400.EFIS Captain.Press MTRS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNAVL,    "PMDG.747-400.EFIS Captain.Increase NAVL");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNAVL,    "PMDG.747-400.EFIS Captain.Decrease NAVL");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNAVR,    "PMDG.747-400.EFIS Captain.Increase NAVR");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNAVR,    "PMDG.747-400.EFIS Captain.Decrease NAVR");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNDMODE,  "PMDG.747-400.EFIS Captain.Increase NDMODE");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNDMODE,  "PMDG.747-400.EFIS Captain.Decrease NDMODE");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressNDMODECTR,  "PMDG.747-400.EFIS Captain.Press NDMODE CTR");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNDRANGE, "PMDG.747-400.EFIS Captain.Increase NDRANGE");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNDRANGE, "PMDG.747-400.EFIS Captain.Decrease NDRANGE");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressNDRANGETFC, "PMDG.747-400.EFIS Captain.Press NDRANGE TFC");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressWXR,        "PMDG.747-400.EFIS Captain.Press WXR");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressSTA,        "PMDG.747-400.EFIS Captain.Press STA");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressWPT,        "PMDG.747-400.EFIS Captain.Press WPT");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressARPT,       "PMDG.747-400.EFIS Captain.Press ARPT");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressDATA,       "PMDG.747-400.EFIS Captain.Press DATA");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressPOS,        "PMDG.747-400.EFIS Captain.Press POS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainPressTERR,       "PMDG.747-400.EFIS Captain.Press TERR");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainSetMINS,         "PMDG.747-400.EFIS Captain.Set MINS");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainSetBARO,         "PMDG.747-400.EFIS Captain.Set BARO");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNAVL,         "PMDG.747-400.EFIS Captain.Set NAVL");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNAVR,         "PMDG.747-400.EFIS Captain.Set NAVR");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNDMODE,       "PMDG.747-400.EFIS Captain.Set NDMODE");
-    MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNDRANGE,      "PMDG.747-400.EFIS Captain.Set NDRANGE"    );
-    MapClientEventToSimEvent(hSimConnect, MCPPressATArm,          "PMDG.747-400.MCP.Press AT Arm");
-    MapClientEventToSimEvent(hSimConnect, MCPPressN1,             "PMDG.747-400.MCP.Press N1");
-    MapClientEventToSimEvent(hSimConnect, MCPPressTHR,            "PMDG.747-400.MCP.Press THR");
-    MapClientEventToSimEvent(hSimConnect, MCPPressSPD,            "PMDG.747-400.MCP.Press SPD");
-    MapClientEventToSimEvent(hSimConnect, MCPPressCO,             "PMDG.747-400.MCP.Press C/O");
-    MapClientEventToSimEvent(hSimConnect, MCPPressFLCH,           "PMDG.747-400.MCP.Press FLCH");
-    MapClientEventToSimEvent(hSimConnect, MCPPressVNAV,           "PMDG.747-400.MCP.Press VNAV");
-    MapClientEventToSimEvent(hSimConnect, MCPPressLNAV,           "PMDG.747-400.MCP.Press LNAV");
-    MapClientEventToSimEvent(hSimConnect, MCPPressVORLOC,         "PMDG.747-400.MCP.Press VORLOC");
-    MapClientEventToSimEvent(hSimConnect, MCPPressAPP,            "PMDG.747-400.MCP.Press APP");
-    MapClientEventToSimEvent(hSimConnect, MCPPressHDGSEL,         "PMDG.747-400.MCP.Press HDG SEL");
-    MapClientEventToSimEvent(hSimConnect, MCPPressHDGHOLD,        "PMDG.747-400.MCP.Press HDG HOLD");
-    MapClientEventToSimEvent(hSimConnect, MCPPressALTHOLD,        "PMDG.747-400.MCP.Press ALT HOLD");
-    MapClientEventToSimEvent(hSimConnect, MCPPressVS,             "PMDG.747-400.MCP.Press V/S");
-    MapClientEventToSimEvent(hSimConnect, MCPPressCMDL,           "PMDG.747-400.MCP.Press CMD L");
-    MapClientEventToSimEvent(hSimConnect, MCPPressCMDC,           "PMDG.747-400.MCP.Press CMD C");
-    MapClientEventToSimEvent(hSimConnect, MCPPressCMDR,           "PMDG.747-400.MCP.Press CMD R");
-    MapClientEventToSimEvent(hSimConnect, MCPPressFDL,            "PMDG.747-400.MCP.Press FD L");
-    MapClientEventToSimEvent(hSimConnect, MCPPressFDR,            "PMDG.747-400.MCP.Press FD R");
-    MapClientEventToSimEvent(hSimConnect, MCPPressAPDiseng,       "PMDG.747-400.MCP.Press AP Diseng");
-    MapClientEventToSimEvent(hSimConnect, MCPIncreaseBankLimiter, "PMDG.747-400.MCP.Increase Bank Limiter");
-    MapClientEventToSimEvent(hSimConnect, MCPDecreaseBankLimiter, "PMDG.747-400.MCP.Decrease Bank Limiter");
-    MapClientEventToSimEvent(hSimConnect, MCPIncreaseAlt,         "PMDG.747-400.MCP.Increase Alt");
-    MapClientEventToSimEvent(hSimConnect, MCPDecreaseAlt,         "PMDG.747-400.MCP.Decrease Alt");
-    MapClientEventToSimEvent(hSimConnect, MCPIncreaseSpd,         "PMDG.747-400.MCP.Increase Spd");
-    MapClientEventToSimEvent(hSimConnect, MCPDecreaseSpd,         "PMDG.747-400.MCP.Decrease Spd");
-    MapClientEventToSimEvent(hSimConnect, MCPIncreaseHdg,         "PMDG.747-400.MCP.Increase Hdg");
-    MapClientEventToSimEvent(hSimConnect, MCPDecreaseHdg,         "PMDG.747-400.MCP.Decrease Hdg");
-    MapClientEventToSimEvent(hSimConnect, MCPIncreaseVS,          "PMDG.747-400.MCP.Increase V/S");
-    MapClientEventToSimEvent(hSimConnect, MCPDecreaseVS,          "PMDG.747-400.MCP.Decrease V/S");
-    MapClientEventToSimEvent(hSimConnect, MCPSetTOGA,             "PMDG.747-400.MCP.Set TO/GA");
-    MapClientEventToSimEvent(hSimConnect, MCPResetTOGA,           "PMDG.747-400.MCP.Reset TO/GA");
-    MapClientEventToSimEvent(hSimConnect, MCPPressSpdIntv,        "PMDG.747-400.MCP.Press Spd Intv");
-    MapClientEventToSimEvent(hSimConnect, MCPPressAltIntv,        "PMDG.747-400.MCP.Press Alt Intv");
-    MapClientEventToSimEvent(hSimConnect, MCPPressCMD,            "PMDG.747-400.MCP.Press CMD");
-    MapClientEventToSimEvent(hSimConnect, MCPPressCWS,            "PMDG.747-400.MCP.Press CWS");
-    MapClientEventToSimEvent(hSimConnect, MCPPressFD,             "PMDG.747-400.MCP.Press FD");
-    MapClientEventToSimEvent(hSimConnect, MCPPressTOGA,           "PMDG.747-400.MCP.Press TO/GA");
-    MapClientEventToSimEvent(hSimConnect, MCPPressBankLimiter,    "PMDG.747-400.MCP.Press Bank Limiter");
-    MapClientEventToSimEvent(hSimConnect, MCPSetAltitude,         "PMDG.747-400.MCP.Set Altitude");
-    MapClientEventToSimEvent(hSimConnect, MCPSetSpeed,            "PMDG.747-400.MCP.Set Speed");
-    MapClientEventToSimEvent(hSimConnect, MCPSetHeading,          "PMDG.747-400.MCP.Set Heading");
-    MapClientEventToSimEvent(hSimConnect, MCPSetVS,               "PMDG.747-400.MCP.Set V/S");
-    MapClientEventToSimEvent(hSimConnect, MCPSetFDL,              "PMDG.747-400.MCP.Set F/D L");
-    MapClientEventToSimEvent(hSimConnect, MCPSetFDR,              "PMDG.747-400.MCP.Set F/D R");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressMINS,       "PMDG.747-400.EFIS Captain.Press MINS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseMINS,    "PMDG.747-400.EFIS Captain.Increase MINS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseMINS,    "PMDG.747-400.EFIS Captain.Decrease MINS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainResetMINS,       "PMDG.747-400.EFIS Captain.Reset MINS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressBARO,       "PMDG.747-400.EFIS Captain.Press BARO");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseBARO,    "PMDG.747-400.EFIS Captain.Increase BARO");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseBARO,    "PMDG.747-400.EFIS Captain.Decrease BARO");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressBAROSTD,    "PMDG.747-400.EFIS Captain.Press BARO STD");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressFPV,        "PMDG.747-400.EFIS Captain.Press FPV");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressMTRS,       "PMDG.747-400.EFIS Captain.Press MTRS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNAVL,    "PMDG.747-400.EFIS Captain.Increase NAVL");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNAVL,    "PMDG.747-400.EFIS Captain.Decrease NAVL");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNAVR,    "PMDG.747-400.EFIS Captain.Increase NAVR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNAVR,    "PMDG.747-400.EFIS Captain.Decrease NAVR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNDMODE,  "PMDG.747-400.EFIS Captain.Increase NDMODE");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNDMODE,  "PMDG.747-400.EFIS Captain.Decrease NDMODE");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressNDMODECTR,  "PMDG.747-400.EFIS Captain.Press NDMODE CTR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainIncreaseNDRANGE, "PMDG.747-400.EFIS Captain.Increase NDRANGE");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainDecreaseNDRANGE, "PMDG.747-400.EFIS Captain.Decrease NDRANGE");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressNDRANGETFC, "PMDG.747-400.EFIS Captain.Press NDRANGE TFC");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressWXR,        "PMDG.747-400.EFIS Captain.Press WXR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressSTA,        "PMDG.747-400.EFIS Captain.Press STA");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressWPT,        "PMDG.747-400.EFIS Captain.Press WPT");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressARPT,       "PMDG.747-400.EFIS Captain.Press ARPT");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressDATA,       "PMDG.747-400.EFIS Captain.Press DATA");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressPOS,        "PMDG.747-400.EFIS Captain.Press POS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainPressTERR,       "PMDG.747-400.EFIS Captain.Press TERR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainSetMINS,         "PMDG.747-400.EFIS Captain.Set MINS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainSetBARO,         "PMDG.747-400.EFIS Captain.Set BARO");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNAVL,         "PMDG.747-400.EFIS Captain.Set NAVL");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNAVR,         "PMDG.747-400.EFIS Captain.Set NAVR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNDMODE,       "PMDG.747-400.EFIS Captain.Set NDMODE");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, EFISCaptainSetNDRANGE,      "PMDG.747-400.EFIS Captain.Set NDRANGE"    );
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressATArm,          "PMDG.747-400.MCP.Press AT Arm");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressN1,             "PMDG.747-400.MCP.Press N1");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressTHR,            "PMDG.747-400.MCP.Press THR");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressSPD,            "PMDG.747-400.MCP.Press SPD");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressCO,             "PMDG.747-400.MCP.Press C/O");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressFLCH,           "PMDG.747-400.MCP.Press FLCH");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressVNAV,           "PMDG.747-400.MCP.Press VNAV");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressLNAV,           "PMDG.747-400.MCP.Press LNAV");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressVORLOC,         "PMDG.747-400.MCP.Press VORLOC");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressAPP,            "PMDG.747-400.MCP.Press APP");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressHDGSEL,         "PMDG.747-400.MCP.Press HDG SEL");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressHDGHOLD,        "PMDG.747-400.MCP.Press HDG HOLD");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressALTHOLD,        "PMDG.747-400.MCP.Press ALT HOLD");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressVS,             "PMDG.747-400.MCP.Press V/S");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressCMDL,           "PMDG.747-400.MCP.Press CMD L");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressCMDC,           "PMDG.747-400.MCP.Press CMD C");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressCMDR,           "PMDG.747-400.MCP.Press CMD R");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressFDL,            "PMDG.747-400.MCP.Press FD L");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressFDR,            "PMDG.747-400.MCP.Press FD R");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressAPDiseng,       "PMDG.747-400.MCP.Press AP Diseng");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPIncreaseBankLimiter, "PMDG.747-400.MCP.Increase Bank Limiter");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPDecreaseBankLimiter, "PMDG.747-400.MCP.Decrease Bank Limiter");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPIncreaseAlt,         "PMDG.747-400.MCP.Increase Alt");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPDecreaseAlt,         "PMDG.747-400.MCP.Decrease Alt");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPIncreaseSpd,         "PMDG.747-400.MCP.Increase Spd");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPDecreaseSpd,         "PMDG.747-400.MCP.Decrease Spd");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPIncreaseHdg,         "PMDG.747-400.MCP.Increase Hdg");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPDecreaseHdg,         "PMDG.747-400.MCP.Decrease Hdg");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPIncreaseVS,          "PMDG.747-400.MCP.Increase V/S");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPDecreaseVS,          "PMDG.747-400.MCP.Decrease V/S");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetTOGA,             "PMDG.747-400.MCP.Set TO/GA");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPResetTOGA,           "PMDG.747-400.MCP.Reset TO/GA");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressSpdIntv,        "PMDG.747-400.MCP.Press Spd Intv");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressAltIntv,        "PMDG.747-400.MCP.Press Alt Intv");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressCMD,            "PMDG.747-400.MCP.Press CMD");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressCWS,            "PMDG.747-400.MCP.Press CWS");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressFD,             "PMDG.747-400.MCP.Press FD");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressTOGA,           "PMDG.747-400.MCP.Press TO/GA");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPPressBankLimiter,    "PMDG.747-400.MCP.Press Bank Limiter");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetAltitude,         "PMDG.747-400.MCP.Set Altitude");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetSpeed,            "PMDG.747-400.MCP.Set Speed");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetHeading,          "PMDG.747-400.MCP.Set Heading");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetVS,               "PMDG.747-400.MCP.Set V/S");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetFDL,              "PMDG.747-400.MCP.Set F/D L");
+    SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetFDR,              "PMDG.747-400.MCP.Set F/D R");
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainPressMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainIncreaseMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainDecreaseMINS);
@@ -554,10 +578,12 @@ void map_747_vars(HANDLE hSimConnect)
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 152, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPVS);
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 160, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPPanelState);
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 16, SIMCONNECT_CLIENTDATATYPE_INT32,0, MACH_IAS);
+	SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 108, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_BANK_LIM);
+	SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 140, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_VS);
     SimConnect_MapClientDataNameToID(hSimConnect,"SDD_AIRCRAFTAUTOPILOTDATA", CDID_AIRCRAFTAUTOPILOTDATA);
     SimConnect_MapClientDataNameToID(hSimConnect,"SDD_AIRCRAFTINSTRUMENTSDATA", CDID_AIRCRAFTINSTRUMENTSDATA);
-    SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_DATA, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_VISUAL_FRAME, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
-    SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_DATA, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_VISUAL_FRAME, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
+	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_APDATA, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED, 0, 0, 0);
+	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_DATA, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED , 0, 0, 0);
 }
 
 
@@ -634,12 +660,14 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 			SIMCONNECT_RECV_CLIENT_DATA *pObjData = (SIMCONNECT_RECV_CLIENT_DATA*)pData;
             int	count	= 0;
 			BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
+
 			while (count < (int) pObjData->dwDefineCount)
 			{
 				int id = *reinterpret_cast<int*>(pD);
+			std::cout << id << std::endl;
 				pD += sizeof(int);
 				size_t tsize = sizeof(int);
-				if (id = MCPMach)
+				if (id == MCPMach)
 				{
 					double val = *reinterpret_cast<double*>(pD);
 					tsize = sizeof(double);
@@ -650,6 +678,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 					int val = *reinterpret_cast<int*>(pD);
                     switch (id)
                     {
+						std::cout << id << "/" << val << std::endl;
                         case MCPHdg:
                             mcp->set_hdg(val);
                             break;
@@ -668,11 +697,15 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                         case MACH_IAS:
                             mcp->set_mach_ias(val);
                             break;
+						case AP_BANK_LIM:
+							break;
+						case AP_VS:
+							mcp->set_vs(val);
+							break;
                         default:
                             break;
                     }
 				}
-				else
 				pD += tsize;
 				++count;
 			}
@@ -798,7 +831,7 @@ int main(int argc, char* argv[])
         int devnum = GFMCPPro_GetNumDevices( ) - 1;
 
 
-		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747 GFMcpPro", NULL, 0, 0, 0)))
+		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
 		{
 			printf("\nConnected to Flight Simulator!");
             map_747_vars(hSimConnect);
@@ -807,15 +840,22 @@ int main(int argc, char* argv[])
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+			int j = 0;
 
 			while( 0 == quit )
 			{
-				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, mcppro);
+				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, &mcppro);
                 if (devnum >= 0)
                 {
-                    mcp->update_mcppro(devnum);
+                    mcppro.update_mcppro(devnum);
                 }
 				Sleep(1);
+/*				if (!(j % 1000)){
+					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER, EFISCaptainPressBARO,
+		j/1000 - 10, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+				}
+				++j;
+				*/
 			}
 			hr = SimConnect_Close(hSimConnect);
 		}
