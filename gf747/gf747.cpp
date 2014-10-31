@@ -8,8 +8,10 @@
 #include <cstdio>
 #include <iomanip>
 #include <map>
-#include<mutex>
-#include<condition_variable>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+
 #define _WINDOWS
 #include <GFDevApi.h>
 
@@ -27,7 +29,8 @@ enum client_data_id
 };
 
 enum DATA_REQUEST_ID {
-    REQUEST_APDATA,
+    REQUEST_FIRST = 2
+    REQUEST_APDATA = 1,
 	REQUEST_DATA,
 	REQUEST_VISIBLE,
     REQUEST_LED
@@ -177,6 +180,24 @@ public:
 			cv.notify_all();
         }
     }
+};
+
+struct efis_input_context: public GFEFISINPUTREPORT
+{
+    efis_input_context()
+    {
+        clear();
+    }
+
+    void clear()
+    {
+        nADialVal = 0;
+        nBDialVal = 0;
+        wSwitchState = 0;
+    }
+
+    std::chrono::high_resolution_clock::time_point fpv_pressed;
+    std::chrono::high_resolution_clock::time_point mtrs_pressed;
 };
 
 namespace
@@ -775,15 +796,15 @@ void map_747_vars(HANDLE hSimConnect)
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 136, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPIas);
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 140, SIMCONNECT_CLIENTDATATYPE_FLOAT64,0,MCPMach);
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 148, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPAlt);
-    SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 152, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPVS);
+    SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 152, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPVS); //seems MCP in reality uses another var from AP data
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 160, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPPanelState);
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 16, SIMCONNECT_CLIENTDATATYPE_INT32,0, MACH_IAS);
 	SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 108, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_BANK_LIM);
 	SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 140, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_VS);
     SimConnect_MapClientDataNameToID(hSimConnect,"SDD_AIRCRAFTAUTOPILOTDATA", CDID_AIRCRAFTAUTOPILOTDATA);
     SimConnect_MapClientDataNameToID(hSimConnect,"SDD_AIRCRAFTINSTRUMENTSDATA", CDID_AIRCRAFTINSTRUMENTSDATA);
-	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, -2, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
-	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, -2, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
+	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_FIRST, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
+	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_FIRST, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
 	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_APDATA, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED, 0, 0, 0);
 	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_DATA, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED , 0, 0, 0);
 
@@ -1015,51 +1036,217 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 }
 
 
+
+
+namespace press_knob
+{
+
+
+enum returns
+{
+    NoAction,
+    Increment,
+    Decrement,
+    Press,
+    ReleasedAfterRotate
+};
+
+returns pressed_knob_input(short & dialcontext, short dialval, unsigned short delta)
+{
+    const short new_middle = 10000;
+    if ((std::abs(dialcontext - new_middle) < delta) || (std::abs(dialcontext) < delta))
+    {
+        dialcontext += dialval;
+    }
+
+    if ((dialcontext + delta) <= 0 || (dialcontext >= delta && dialcontext < (delta * 10)) )
+    {
+        dialcontext += new_middle;
+    }
+
+    if (dialcontext <= (new_middle - delta) && dialcontext >= (delta * 10))
+    {
+        dialcontext += delta;
+        return Decrement;
+    }
+    else if (dialcontext >= (new_middle + delta))
+    {
+        dialcontext -= delta;
+        return Increment;
+    }
+    return NoAction;
+}
+
+
+returns process_knob(int & unpressedval, short& dialcontext, short dial, 
+        unsigned long prev_state, unsigned long new_state, unsigned long mask, 
+        unsigned short delta, unsigned short delta2 = delta/2)
+{
+    bool last_press = prev_state & mask;
+    bool new_press = new_state & mask;
+    returns ret = NoAction;
+
+    if (new_press && last_press) //pressed and holding
+    {
+        ret = pressed_knob_input(dialcontext, dial, delta);
+    }
+    else if ( !last_press && !new_press) // not pressed
+    {
+        unpressedval += dial;
+    }
+    else if (last_press && !new_press) //released
+    {
+        if (std::abs(dialcontext + dialval) < delta2)
+        {
+            ret = Press;
+        }
+        else
+        {
+            ret = ReleasedAfterRotate;
+        }
+        dialcontext = 0;
+    }
+    return ret;
+}
+
+
+}
+
+
+
+
+
 void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
 {
+    static efis_input_context ctx;
 	ctr.state.nav_l = ((r->wSwitchState) & GFEFIS_SW_10)?1:(((r->wSwitchState) & GFEFIS_SW_9)?2:0);
 	ctr.state.nav_r = ((r->wSwitchState) & GFEFIS_SW_12)?1:(((r->wSwitchState) & GFEFIS_SW_11)?2:0);
 	ctr.state.nd_mode = (r->bSelectors & GFEFIS_MASK_SEL1);
 	ctr.state.nd_range = ((r->bSelectors & GFEFIS_MASK_SEL2) >> 4) + 1;
-	ctr.cmd.wxr = ((r->wSwitchState) & GFEFIS_SW_7)?1:0;
-	ctr.cmd.sta = ((r->wSwitchState) & GFEFIS_SW_6)?1:0;
-	ctr.cmd.wpt = ((r->wSwitchState) & GFEFIS_SW_5)?1:0;
-	ctr.cmd.arpt = ((r->wSwitchState) & GFEFIS_SW_4)?1:0;
-	ctr.cmd.data = ((r->wSwitchState) & GFEFIS_SW_3)?1:0;
-	ctr.cmd.pos = ((r->wSwitchState) & GFEFIS_SW_2)?1:0;
-	ctr.cmd.terr = ((r->wSwitchState) & GFEFIS_SW_1)?1:0;
-	ctr.cmd.mtrs = ((r->wSwitchState) & GFEFIS_SW_13)?1:0;
-	ctr.cmd.fpv = ((r->wSwitchState) & GFEFIS_SW_14)?1:0;
-	ctr.cmd.mins_rst = ((r->wSwitchState) & GFEFIS_SW_15)?1:0;
-	ctr.cmd.baro_std = ((r->wSwitchState) & GFEFIS_SW_16)?1:0;
+
+    unsigned short pressed = (ctx.wSwitchState ^ r->wSwitchState) & (r->wSwitchState);
+    unsigned short released = (ctx.wSwitchState ^ r->wSwitchState) & ~(r->wSwitchState);
+
+    ctr.cmd.wxr = (pressed & GFEFIS_SW_7)?1:0;
+	ctr.cmd.sta = (pressed & GFEFIS_SW_6)?1:0;
+	ctr.cmd.wpt = (pressed & GFEFIS_SW_5)?1:0;
+	ctr.cmd.arpt = (pressed & GFEFIS_SW_4)?1:0;
+	ctr.cmd.data = (pressed & GFEFIS_SW_3)?1:0;
+	ctr.cmd.pos = (pressed & GFEFIS_SW_2)?1:0;
+	ctr.cmd.terr = (pressed & GFEFIS_SW_1)?1:0;
+
+
+    const unsigned short delta = 10;
+    switch( process_knob(ctr.cmd.mins_knob, ctx.nADialVal, nADialVal,
+            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_15, delta))
+    {
+        case press_knob::Increment: ctr.cmd.min_sw_inc = 1; break;
+        case press_knob::Decrement: ctr.cmd.min_sw_dec = 1; break;
+        case press_knob::Press: ctr.cmd.mins_rst = 1; break;
+        default:
+            ;
+    }
+
+    switch( process_knob(ctr.cmd.baro_knob, ctx.nBDialVal, nBDialVal,
+            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_16, delta))
+    {
+        case press_knob::Increment: ctr.cmd.baro_sw_inc = 1; break;
+        case press_knob::Decrement: ctr.cmd.baro_sw_dec = 1; break;
+        case press_knob::Press: ctr.cmd.baro_std = 1; break;
+        default:
+            ;
+    }
+
+    if (pressed & GFEFIS_SW_13) //MTRS
+    {
+        ctx.mtrs_pressed = std::chrono::high_resolution_clock::now();
+    }
+
+    if (pressed & GFEFIS_SW_14) //FPV
+    {
+        ctx.fpv_pressed = std::chrono::high_resolution_clock::now();
+    }
+
+    const long long hold_key_time_ms = 1000;
+
+    if (released & GFEFIS_SW_13) //MTRS
+    {
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::high_resolution_clock::now()
+                    - ctx.mtrs_pressed).count() > hold_key_time_ms)
+        {
+            ctr.cmd.ctr = 1;
+        }
+        else
+        {
+            ctr.cmd.mtrs = 1;
+        }
+    }
+
+    if (released & GFEFIS_SW_14) //FPV
+    {
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::high_resolution_clock::now()
+                    - ctx.fpv_pressed).count() > hold_key_time_ms)
+        {
+            ctr.cmd.tfc = 1;
+        }
+        else
+        {
+            ctr.cmd.fpv = 1;
+        }
+    }
+    ctx.wSwitchState = r->wSwitchState;
 }
 
 void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 {
+    static GFMCPPROINPUTREPORT ctx = {0};
+
 	ctr.state.ap_disengage = ((r->ulSwitchState) & GFMCPPRO_SW_23)?1:0;
 	ctr.state.at_arm = ((r->ulSwitchState) & GFMCPPRO_SW_5)?1:0;
 	ctr.state.fd_l = ((r->ulSwitchState) & GFMCPPRO_SW_15)?1:0;
 	ctr.state.fd_r = ((r->ulSwitchState) & GFMCPPRO_SW_24)?1:0;
-	ctr.cmd.vnav = ((r->ulSwitchState) & GFMCPPRO_SW_1)?1:0;
-	ctr.cmd.lnav = ((r->ulSwitchState) & GFMCPPRO_SW_2)?1:0;
-	ctr.cmd.cmd_l = ((r->ulSwitchState) & GFMCPPRO_SW_3)?1:0;
-	ctr.cmd.cmd_r = ((r->ulSwitchState) & GFMCPPRO_SW_4)?1:0;
-	ctr.cmd.cmd_c = ((r->ulSwitchState) & GFMCPPRO_SW_10)?1:0;
-	ctr.cmd.c_o = ((r->ulSwitchState) & GFMCPPRO_SW_6)?1:0;
-	ctr.cmd.spd_intv = (((r->ulSwitchState) & GFMCPPRO_SW_7) || ((r->ulSwitchState) & GFMCPPRO_SW_12))?1:0;
 
-	ctr.cmd.vorloc = ((r->ulSwitchState) & GFMCPPRO_SW_8)?1:0;
-	ctr.cmd.alt_intv = (((r->ulSwitchState) & GFMCPPRO_SW_9) || ((r->ulSwitchState) & GFMCPPRO_SW_14))?1:0;
-	ctr.cmd.hdgsel = ((r->ulSwitchState) & GFMCPPRO_SW_13)?1:0;
-	ctr.cmd.thr = ((r->ulSwitchState) & GFMCPPRO_SW_16)?1:0;
-	ctr.cmd.spd = ((r->ulSwitchState) & GFMCPPRO_SW_17)?1:0;
-	ctr.cmd.flch = ((r->ulSwitchState) & GFMCPPRO_SW_18)?1:0;
-	ctr.cmd.hdghld = ((r->ulSwitchState) & GFMCPPRO_SW_19)?1:0;
-	ctr.cmd.app = ((r->ulSwitchState) & GFMCPPRO_SW_20)?1:0;
-	ctr.cmd.althld = ((r->ulSwitchState) & GFMCPPRO_SW_21)?1:0;
-	ctr.cmd.vs = ((r->ulSwitchState) & GFMCPPRO_SW_22)?1:0;
+    unsigned short pressed = (ctx.ulSwitchState ^ r->ulSwitchState) & (r->ulSwitchState);
+    unsigned short released = (ctx.ulSwitchState ^ r->ulSwitchState) & ~(r->ulSwitchState);
 
 
+	ctr.cmd.vnav = (pressed & GFMCPPRO_SW_1)?1:0;
+	ctr.cmd.lnav = (pressed & GFMCPPRO_SW_2)?1:0;
+	ctr.cmd.cmd_l = (pressed & GFMCPPRO_SW_3)?1:0;
+	ctr.cmd.cmd_r = (pressed & GFMCPPRO_SW_4)?1:0;
+	ctr.cmd.cmd_c = (pressed & GFMCPPRO_SW_10)?1:0;
+	ctr.cmd.c_o = (pressed & GFMCPPRO_SW_6)?1:0;
+	ctr.cmd.spd_intv = ((pressed & GFMCPPRO_SW_7) || (pressed & GFMCPPRO_SW_12))?1:0;
+
+	ctr.cmd.vorloc = (pressed & GFMCPPRO_SW_8)?1:0;
+	ctr.cmd.alt_intv = ((pressed & GFMCPPRO_SW_9) || (pressed & GFMCPPRO_SW_14))?1:0;
+
+	ctr.cmd.thr = (pressed & GFMCPPRO_SW_16)?1:0;
+	ctr.cmd.spd = (pressed & GFMCPPRO_SW_17)?1:0;
+	ctr.cmd.flch = (pressed & GFMCPPRO_SW_18)?1:0;
+	ctr.cmd.hdghld = (pressed & GFMCPPRO_SW_19)?1:0;
+	ctr.cmd.app = (pressed & GFMCPPRO_SW_20)?1:0;
+	ctr.cmd.althld = (pressed & GFMCPPRO_SW_21)?1:0;
+	ctr.cmd.vs = (pressed & GFMCPPRO_SW_22)?1:0;
+
+    switch( process_knob(ctr.cmd.hdg_knob, ctx.nCDialVal, nCDialVal,
+            ctx.ulSwitchState, r->ulSwitchState, GFMCPPRO_SW_13, 6))
+    {
+        case press_knob::Increment: ctr.cmd.bank_inc = 1; break;
+        case press_knob::Decrement: ctr.cmd.bank_dec = 1; break;
+        case press_knob::Press: ctr.cmd.hdgsel = 1; break;
+        case press_knob::Press: ctr.cmd.bank_change_end = 1; break;
+        default:
+            ;
+    }
+
+    ctr.cmd.spd_knob += ctx.nBDialVal;
+    ctr.cmd.alt_knob += ctx.nDDialVal;
+    ctr.cmd.vs_knob += ctx.nEDialVal;
+
+    ctx.ulSwitchState = r->ulSwitchState;
 }
 
 
@@ -1246,6 +1433,52 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, mcppro_di
 				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseAlt:MCPDecreaseAlt, 0 ,gid , flag );
             }
         }
+
+        if (controls.cmd.hdg_knob)
+        {
+            bool inc = (controls.cmd.hdg_knob > 0);
+            for (int i = std::abs(controls.cmd.hdg_knob); i > 0; --i )
+            {
+				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseHdg:MCPDecreaseHdg, 0 ,gid , flag );
+            }
+        }
+
+        if (controls.cmd.spd_knob)
+        {
+            bool inc = (controls.cmd.spd_knob > 0);
+            for (int i = std::abs(controls.cmd.spd_knob); i > 0; --i )
+            {
+				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseSpd:MCPDecreaseSpd, 0 ,gid , flag );
+            }
+        }
+
+        if (controls.cmd.vs_knob)
+        {
+            bool inc = (controls.cmd.vs_knob > 0);
+            for (int i = std::abs(controls.cmd.vs_knob); i > 0; --i )
+            {
+				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseVS:MCPDecreaseVS, 0 ,gid , flag );
+            }
+        }
+
+        if (controls.cmd.mins_knob)
+        {
+            bool inc = (controls.cmd.mins_knob > 0);
+            for (int i = std::abs(controls.cmd.mins_knob); i > 0; --i )
+            {
+				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?EFISCaptainIncreaseMINS:EFISCaptainDecreaseMINS, 0 ,gid , flag );
+            }
+        }
+
+        if (controls.cmd.baro_knob)
+        {
+            bool inc = (controls.cmd.baro_knob > 0);
+            for (int i = std::abs(controls.cmd.baro_knob); i > 0; --i )
+            {
+				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?EFISCaptainIncreaseBARO:EFISCaptainDecreaseBARO, 0 ,gid , flag );
+            }
+        }
+
     }
 
 }
