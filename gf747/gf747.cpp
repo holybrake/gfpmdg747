@@ -29,7 +29,7 @@ enum client_data_id
 };
 
 enum DATA_REQUEST_ID {
-    REQUEST_FIRST = 2
+    REQUEST_FIRST = -2,
     REQUEST_APDATA = 1,
 	REQUEST_DATA,
 	REQUEST_VISIBLE,
@@ -227,6 +227,7 @@ class mcppro_display_747
     bool spd_display_on;
     bool vs_display_on;
 	bool show_bank_lim;
+	bool panel_state_initialized;
 
     static unsigned set_indicator_by_panel_state(unsigned panel_state)
     {
@@ -299,9 +300,21 @@ public:
 		  ,mach_changed(false)
           ,panel_state_changed(false)
           ,show_bank_lim(false)
+		  ,panel_state_initialized(false)
           ,ulIndicatorState(0ul), spd_display_on(false), vs_display_on(false)
     {
     }
+
+	bool is_initialized()
+	{
+		return panel_state_initialized;
+	}
+
+	void onreload()
+	{
+		panel_state_initialized = false;
+	}
+
 
     void set_hdg(int arg)
     {
@@ -373,6 +386,7 @@ public:
 
     void set_panel_state(int arg)
     {
+		panel_state_initialized = true;
         if (arg != last_panel_state)
         {
             bool disp_on = arg & 0x02000000u; // ias/mach disp
@@ -410,7 +424,7 @@ public:
 
     void set_mach(double arg)
     {
-        if (std::abs(arg - last_mach) > 0.005 )
+        if (std::abs(arg - last_mach) > 0.0005 )
         {
             last_mach = arg;
             mach_changed = true;
@@ -454,22 +468,23 @@ public:
 
         if (hdg_changed)
         {
-            if (show_bank_lim)
+            if (show_bank_lim )
             {
-                if (last_bank_lim)
-                {
-                    sprintf( szNumericMsg, "%03d", last_bank_lim);
-                }
-                else
-                {
-                    sprintf( szNumericMsg, "Aut");
-                }
+				if (last_bank_lim)
+				{
+					sprintf( szNumericMsg, "b%02d", last_bank_lim);
+				}
+				else
+				{
+                    sprintf( szNumericMsg, " a ");
+				}
             }
             else
             {
-                sprintf( szNumericMsg, "%03d", last_hdg);
+                sprintf( szNumericMsg, "%03d", (last_hdg == 360)?0:last_hdg);
             }
-            GFMCPPro_SetCDisplayText(devnum, szNumericMsg);
+         	GFMCPPro_SetCDisplayText(devnum, szNumericMsg);
+			
             hdg_changed = false;
         }
         if (vs_changed)
@@ -861,6 +876,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
             {
                 case EVENT_SIM_START:
                     std::cout << "\nSIMSTART" << std::endl;
+					break;
 				case EVENT_SIM_UNPAUSED:
                     std::cout << "\nUnpaused" << std::endl;
 
@@ -868,7 +884,11 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                     // only that data that has changed
 //					piface->set_data_request();
                     break;
+				case EVENT_SIM_STOP:
+					std::cout << "\nSIMSTOP" << std::endl;
+					break;
 				case EVENT_AIRCRAFT_LOADED:
+					mcp->onreload();
                     std::cout << "\nAircraftLoaded" << std::endl;
 					break;
                 default:
@@ -893,14 +913,14 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 				if (id == MCPMach)
 				{
 					double val = *reinterpret_cast<double*>(pD);
-                    std::cout << id << "/" << val << std::endl;
+                    //std::cout << id << "/" << val << std::endl;
 					tsize = sizeof(double);
                     mcp->set_mach(val);
 				}
                 else
 				{
 					int val = *reinterpret_cast<int*>(pD);
-                    std::cout << id << "/" << val << std::endl;
+					std::cout << std::dec << id << "/" << val << std::endl;
                     switch (id)
                     {
                         case EFISBaro:
@@ -945,6 +965,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                             mcp->set_mach_ias(val);
                             break;
 						case AP_BANK_LIM:
+							mcp->set_bank_lim(val);
 							break;
 						case AP_VS:
 							mcp->set_vs(val);
@@ -966,6 +987,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 			{
 				case EVENT_AIRCRAFT_LOADED:
 					break;
+                    std::cout << "\nAircraftLoaded2" << std::endl;
 
                 default:
                    break;
@@ -986,6 +1008,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 
                     break;
 				case EVENT_AIRCRAFT_LOADED:
+                    std::cout << "\nAircraftLoaded3" << std::endl;
 
 					break;
                 default:
@@ -1078,9 +1101,9 @@ returns pressed_knob_input(short & dialcontext, short dialval, unsigned short de
 }
 
 
-returns process_knob(int & unpressedval, short& dialcontext, short dial, 
+returns process_knob(int & unpressedval, short& dialcontext, short dialval, 
         unsigned long prev_state, unsigned long new_state, unsigned long mask, 
-        unsigned short delta, unsigned short delta2 = delta/2)
+        unsigned short delta, unsigned short delta2)
 {
     bool last_press = prev_state & mask;
     bool new_press = new_state & mask;
@@ -1088,11 +1111,11 @@ returns process_knob(int & unpressedval, short& dialcontext, short dial,
 
     if (new_press && last_press) //pressed and holding
     {
-        ret = pressed_knob_input(dialcontext, dial, delta);
+        ret = pressed_knob_input(dialcontext, dialval, delta);
     }
     else if ( !last_press && !new_press) // not pressed
     {
-        unpressedval += dial;
+        unpressedval += dialval;
     }
     else if (last_press && !new_press) //released
     {
@@ -1136,9 +1159,9 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
 	ctr.cmd.terr = (pressed & GFEFIS_SW_1)?1:0;
 
 
-    const unsigned short delta = 10;
-    switch( process_knob(ctr.cmd.mins_knob, ctx.nADialVal, nADialVal,
-            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_15, delta))
+    const unsigned short delta = 3;
+    switch( press_knob::process_knob(ctr.cmd.mins_knob, ctx.nADialVal, r->nADialVal,
+            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_15, delta, 1))
     {
         case press_knob::Increment: ctr.cmd.min_sw_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.min_sw_dec = 1; break;
@@ -1147,8 +1170,8 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
             ;
     }
 
-    switch( process_knob(ctr.cmd.baro_knob, ctx.nBDialVal, nBDialVal,
-            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_16, delta))
+    switch( press_knob::process_knob(ctr.cmd.baro_knob, ctx.nBDialVal, r->nBDialVal,
+            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_16, delta, 1))
     {
         case press_knob::Increment: ctr.cmd.baro_sw_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.baro_sw_dec = 1; break;
@@ -1167,7 +1190,7 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
         ctx.fpv_pressed = std::chrono::high_resolution_clock::now();
     }
 
-    const long long hold_key_time_ms = 1000;
+    const long long hold_key_time_ms = 500;
 
     if (released & GFEFIS_SW_13) //MTRS
     {
@@ -1175,7 +1198,7 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
                     std::chrono::high_resolution_clock::now()
                     - ctx.mtrs_pressed).count() > hold_key_time_ms)
         {
-            ctr.cmd.ctr = 1;
+            ctr.cmd.tfc = 1;
         }
         else
         {
@@ -1189,7 +1212,7 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
                     std::chrono::high_resolution_clock::now()
                     - ctx.fpv_pressed).count() > hold_key_time_ms)
         {
-            ctr.cmd.tfc = 1;
+            ctr.cmd.ctr = 1;
         }
         else
         {
@@ -1208,8 +1231,8 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 	ctr.state.fd_l = ((r->ulSwitchState) & GFMCPPRO_SW_15)?1:0;
 	ctr.state.fd_r = ((r->ulSwitchState) & GFMCPPRO_SW_24)?1:0;
 
-    unsigned short pressed = (ctx.ulSwitchState ^ r->ulSwitchState) & (r->ulSwitchState);
-    unsigned short released = (ctx.ulSwitchState ^ r->ulSwitchState) & ~(r->ulSwitchState);
+    unsigned long pressed = (ctx.ulSwitchState ^ r->ulSwitchState) & (r->ulSwitchState);
+    unsigned long released = (ctx.ulSwitchState ^ r->ulSwitchState) & ~(r->ulSwitchState);
 
 
 	ctr.cmd.vnav = (pressed & GFMCPPRO_SW_1)?1:0;
@@ -1231,20 +1254,20 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 	ctr.cmd.althld = (pressed & GFMCPPRO_SW_21)?1:0;
 	ctr.cmd.vs = (pressed & GFMCPPRO_SW_22)?1:0;
 
-    switch( process_knob(ctr.cmd.hdg_knob, ctx.nCDialVal, nCDialVal,
-            ctx.ulSwitchState, r->ulSwitchState, GFMCPPRO_SW_13, 6))
+    switch( press_knob::process_knob(ctr.cmd.hdg_knob, ctx.nCDialVal, r->nCDialVal,
+            ctx.ulSwitchState, r->ulSwitchState, GFMCPPRO_SW_13, 2, 1))
     {
         case press_knob::Increment: ctr.cmd.bank_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.bank_dec = 1; break;
         case press_knob::Press: ctr.cmd.hdgsel = 1; break;
-        case press_knob::Press: ctr.cmd.bank_change_end = 1; break;
+		case press_knob::ReleasedAfterRotate: ctr.cmd.bank_change_end = 1; break;
         default:
             ;
     }
 
-    ctr.cmd.spd_knob += ctx.nBDialVal;
-    ctr.cmd.alt_knob += ctx.nDDialVal;
-    ctr.cmd.vs_knob += ctx.nEDialVal;
+    ctr.cmd.spd_knob += r->nBDialVal;
+    ctr.cmd.alt_knob += r->nDDialVal;
+    ctr.cmd.vs_knob += r->nEDialVal;
 
     ctx.ulSwitchState = r->ulSwitchState;
 }
@@ -1347,7 +1370,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, mcppro_di
         if ((controls.cmd.min_sw_inc && !sim_controls_state.min_sw) || (controls.cmd.min_sw_dec && sim_controls_state.min_sw) )
             SimConnect_TransmitClientEvent( hSimConnect, obj , EFISCaptainPressMINS, 0 ,gid , flag );
         if ((controls.cmd.baro_sw_inc && !sim_controls_state.baro_sw) || (controls.cmd.baro_sw_dec && sim_controls_state.baro_sw) )
-            SimConnect_TransmitClientEvent( hSimConnect, obj , EFISCaptainPressMINS, 0 ,gid , flag );
+            SimConnect_TransmitClientEvent( hSimConnect, obj , EFISCaptainPressBARO, 0 ,gid , flag );
         if (controls.cmd.mins_rst )
             SimConnect_TransmitClientEvent( hSimConnect, obj , EFISCaptainResetMINS, 0 ,gid , flag );
         if (controls.cmd.baro_std )
@@ -1399,8 +1422,8 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, mcppro_di
         if (controls.cmd.althld )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressALTHOLD, 0 ,gid , flag );
         if (controls.cmd.vs )
-            SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressVS, 0 ,gid , flag );
-        if (controls.cmd.cmd_l )
+		    SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressVS, 0 ,gid , flag );
+		if (controls.cmd.cmd_l )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressCMDL, 0 ,gid , flag );
         if (controls.cmd.cmd_c )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressCMDC, 0 ,gid , flag );
@@ -1527,11 +1550,13 @@ int main(int argc, char* argv[])
                 {
                     mcppro.update_mcppro(gfmcppro_num);
                 }
-
-                if (global_controls_info.get_new_input(controls, 1000))
-                {
-                    process_input(hSimConnect, controls, mcppro);
-                }
+				if (mcppro.is_initialized())
+				{
+					if (global_controls_info.get_new_input(controls, 1000))
+					{
+						process_input(hSimConnect, controls, mcppro);
+					}
+				}
 			}
 			hr = SimConnect_Close(hSimConnect);
 		}
