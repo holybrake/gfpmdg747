@@ -11,6 +11,9 @@
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#include <algorithm>
+#include <iterator>
+#include <string>
 
 #define _WINDOWS
 #include <GFDevApi.h>
@@ -135,14 +138,47 @@ struct controls_block
 class controls_info
 {
     std::mutex mtx;
+	std::mutex hardware_mtx;
     std::condition_variable cv;
     int current;
     bool has_new;
     controls_block controls[2];
+	bool hardware_changed;
+	int gfmcppro_num;
+	int gfefis_num;
+
 public:
-    controls_info(): current(0), has_new(false)
+	controls_info() : current(0), has_new(false), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1)
     {
     }
+
+	void on_hardware_changed()
+	{
+		std::cout << "onconnect" << std::endl;
+		std::unique_lock<std::mutex> lck(hardware_mtx);
+		hardware_changed = true;
+	}
+	bool get_devs_and_changed(int& mcpnum, int& efisnum)
+	{
+		std::unique_lock<std::mutex> lck(hardware_mtx);
+		bool ret = hardware_changed;
+		if (hardware_changed)
+		{
+			gfmcppro_num = GFMCPPro_GetNumDevices() - 1;
+			gfefis_num = GFEFIS_GetNumDevices() - 1;
+			hardware_changed = false;
+		}
+		mcpnum = gfmcppro_num;
+		efisnum = gfefis_num;
+		return ret;
+	}
+	void get_devs(int& mcpnum, int& efisnum)
+	{
+		std::unique_lock<std::mutex> lck(hardware_mtx);
+		mcpnum = gfmcppro_num;
+		efisnum = gfefis_num;
+	}
+
 
     bool get_new_input(controls_block & out, unsigned int timeout_us = 0)
     {
@@ -228,7 +264,8 @@ class mcppro_display_747
     bool vs_display_on;
 	bool show_bank_lim;
 	bool panel_state_initialized;
-
+	int pmdg_747_loaded;
+	
     static unsigned set_indicator_by_panel_state(unsigned panel_state)
     {
 // panel state bitmask(0=ap L,1=ap R,2=ap C,3=ap dis,4=f/d,5=fo f/d,6=a/t,7=thr,8=spd,9=flch,10=vnav,11=lnav,12=loc,13=app,15=althld,16=v/s,19=hdghold,25=spddisplay,27=v/sdisplay )
@@ -282,6 +319,13 @@ class mcppro_display_747
 
 
 public:
+	enum loaded_states
+	{
+		PMDG747_UNLOADED = -1,
+		PMDG747_NOTLOADED = 0,
+		PMDG747_LOADED,
+		PMDG747_JUSTLOADED		
+	};
     mcppro_display_747()
         : last_hdg(mcp_fields_uninit_magic)
           ,last_ias(mcp_fields_uninit_magic)
@@ -299,11 +343,55 @@ public:
 		  ,ias_changed(false)
 		  ,mach_changed(false)
           ,panel_state_changed(false)
-          ,show_bank_lim(false)
+		  ,ulIndicatorState(0ul)
+		  ,spd_display_on(false)
+		  ,vs_display_on(false)
+		  ,show_bank_lim(false)
 		  ,panel_state_initialized(false)
-          ,ulIndicatorState(0ul), spd_display_on(false), vs_display_on(false)
+		  ,pmdg_747_loaded(PMDG747_NOTLOADED)
     {
     }
+
+	int get_pmdg747_loaded()
+	{
+		int ret = pmdg_747_loaded;
+		if (pmdg_747_loaded == PMDG747_JUSTLOADED)
+		{
+			pmdg_747_loaded = PMDG747_LOADED;
+		}
+		else if (pmdg_747_loaded == PMDG747_UNLOADED)
+		{
+			pmdg_747_loaded = PMDG747_NOTLOADED;
+		}
+		return ret;
+	}
+	void set_pmdg747_loaded(bool state)
+	{
+		if (state)
+		{
+			if (pmdg_747_loaded == PMDG747_NOTLOADED)
+			{
+				pmdg_747_loaded = PMDG747_JUSTLOADED;
+			}
+			else if (pmdg_747_loaded == PMDG747_UNLOADED)
+			{
+				pmdg_747_loaded = PMDG747_LOADED;
+			}			
+		}
+		else
+		{
+			if (pmdg_747_loaded == PMDG747_JUSTLOADED)
+			{
+				pmdg_747_loaded = PMDG747_NOTLOADED;
+			}
+			else if (pmdg_747_loaded == PMDG747_LOADED)
+			{
+				pmdg_747_loaded = PMDG747_UNLOADED;
+			}
+		}
+	}
+
+	 
 
 	bool is_initialized()
 	{
@@ -389,13 +477,13 @@ public:
 		panel_state_initialized = true;
         if (arg != last_panel_state)
         {
-            bool disp_on = arg & 0x02000000u; // ias/mach disp
+            bool disp_on = (arg & 0x02000000u)? true: false; // ias/mach disp
             if (disp_on != spd_display_on)
             {
                 spd_display_on = disp_on;
                 mach_ias_changed = true;
             }
-            disp_on = arg & 0x08000000u; // v/s disp
+            disp_on = (arg & 0x08000000u)? true : false ; // v/s disp
             if (disp_on != vs_display_on)
             {
                 vs_display_on = disp_on;
@@ -404,7 +492,7 @@ public:
 
             last_panel_state = arg;
             unsigned ind = set_indicator_by_panel_state(last_panel_state);
-            if ( ind != ulIndicatorState);
+            if ( ind != ulIndicatorState)
             {
                 ulIndicatorState = ind;
                 panel_state_changed = true;
@@ -522,6 +610,7 @@ enum sim_events
     EVENT_SIM_STOP,
     EVENT_SIM_UNPAUSED,
     EVENT_AIRCRAFT_LOADED,
+	EVENT_FLIGHT_LOADED,
     IFACE_EVENTS_START = 100,
     EFISCaptainPressMINS,
     EFISCaptainIncreaseMINS,
@@ -629,8 +718,6 @@ enum sim_data
 namespace //globals
 {
     controls_info global_controls_info;
-    int gfmcppro_num = -1;
-    int gfefis_num = -1;
 }
 
 
@@ -838,6 +925,18 @@ int quit = 0;
 bool second_buf_filled = false;
 unsigned char buf[2048][2] = {0};
 int cur_buf = 0;
+bool is_pmdg747_loaded(const std::string& filename)
+{
+	
+	std::string upcased;
+	std::transform(filename.begin(), filename.end(), std::back_inserter(upcased), toupper);
+	//it is not fair upcase, but we just need to find latin string
+	if (upcased.rfind("PMDG747-400") == std::string::npos)
+	{
+		return false;
+	}
+	return true;
+}
 }
 
 BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType)
@@ -865,9 +964,10 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 
     mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747 *>(ctxt);
 
-
+	std::cout << "Pdata id=" << pData->dwID << std::endl;
     switch(pData->dwID)
     {
+		
         case SIMCONNECT_RECV_ID_EVENT:
         {
             SIMCONNECT_RECV_EVENT *evt = (SIMCONNECT_RECV_EVENT*)pData;
@@ -886,10 +986,6 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                     break;
 				case EVENT_SIM_STOP:
 					std::cout << "\nSIMSTOP" << std::endl;
-					break;
-				case EVENT_AIRCRAFT_LOADED:
-					mcp->onreload();
-                    std::cout << "\nAircraftLoaded" << std::endl;
 					break;
                 default:
 				   std::cout << "EVENT " << evt->uEventID << std::endl;
@@ -986,9 +1082,14 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 			switch(ev_f->uEventID)
 			{
 				case EVENT_AIRCRAFT_LOADED:
+					mcp->set_pmdg747_loaded(is_pmdg747_loaded(ev_f->szFileName));
+					mcp->onreload();
 					break;
-                    std::cout << "\nAircraftLoaded2" << std::endl;
-
+				case EVENT_FLIGHT_LOADED:
+					mcp->onreload();
+					std::cout << "\nFlightLoaded" << std::endl;
+					std::cout << ev_f->szFileName << std::endl;
+					break;
                 default:
                    break;
             }
@@ -1003,16 +1104,13 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 			{
                 case EVENT_SIM_START:
                     std::cout << "\nSTART" << std::endl;
-                    // Make the call for data every second, but only when it changes and
-                    // only that data that has changed
-
                     break;
 				case EVENT_AIRCRAFT_LOADED:
-                    std::cout << "\nAircraftLoaded3" << std::endl;
-
+					mcp->set_pmdg747_loaded(is_pmdg747_loaded(ptr->szString));
+					mcp->onreload();					
 					break;
                 default:
-                   break;
+					break;
             }
             break;
 		}
@@ -1105,8 +1203,8 @@ returns process_knob(int & unpressedval, short& dialcontext, short dialval,
         unsigned long prev_state, unsigned long new_state, unsigned long mask, 
         unsigned short delta, unsigned short delta2)
 {
-    bool last_press = prev_state & mask;
-    bool new_press = new_state & mask;
+    bool last_press = (prev_state & mask) ? true : false;
+    bool new_press = (new_state & mask) ? true : false;
     returns ret = NoAction;
 
     if (new_press && last_press) //pressed and holding
@@ -1272,48 +1370,57 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
     ctx.ulSwitchState = r->ulSwitchState;
 }
 
+static BOOL ConnectCallback(GFDEV_HW_TYPE HWType, unsigned short wParam, GFDEV_EVENT_TOKEN event)
+{
+	GFDev_UnregisterInputCallback();
+	global_controls_info.on_hardware_changed();	
+	return TRUE;
+}
 
 static BOOL InputCallback( GFDEV_HW_TYPE HWType, unsigned short wParam, LPGFINPUTREPORTTYPE lParam )
 {
 	BOOL bInputProcessed = FALSE;
 
-	if( NULL != lParam ) // sanity check...
-		{
-			
-				if( GFDEVHWTYPE_GFMCPPRO == HWType && wParam == gfmcppro_num)
-				{
-                    LPGFMCPPROINPUTREPORT r = reinterpret_cast<LPGFMCPPROINPUTREPORT>(lParam);
-					std::cout << "M" << std::setw(8) << r->nADialVal << std::setw(8)<< r->nBDialVal << std::setw(8)<< r->nCDialVal
-						<< std::setw(8) << r->nDDialVal << std::setw(8) << r->nEDialVal << std::setw(8) << r->nFDialVal << std::hex<< std::setw(10)<< r->ulSwitchState << std::endl;
-					controls_block& ctr = global_controls_info.get_current_for_write();
-					fill_mcp_data(ctr, r);
-					global_controls_info.input_processed();
-                    bInputProcessed = TRUE;
-				}
-				else if( GFDEVHWTYPE_GFEFIS == HWType  && wParam == gfefis_num)
-				{
-					LPGFEFISINPUTREPORT r = reinterpret_cast<LPGFEFISINPUTREPORT>(lParam);
-					std::cout << "E"<<std::setw(8) << r->nADialVal << std::setw(8)<< r->nBDialVal << std::setw(8)<< std::hex<< int(r->bSelectors)
-						<< std::hex<< std::setw(10)<< r->wSwitchState << std::endl;
-					controls_block& ctr = global_controls_info.get_current_for_write();
-					fill_efis_data(ctr, r);
-					global_controls_info.input_processed();
-					bInputProcessed = TRUE;
-				}
-				else
-				{
-					std::cout << "unknown input: " << HWType << '/' << wParam << std::endl;
+	if (NULL != lParam) // sanity check...
+	{
+		int gfmcppro_num = -1;
+		int gfefis_num = -1;
+		global_controls_info.get_devs(gfmcppro_num, gfefis_num);
 
-				}
+		if (GFDEVHWTYPE_GFMCPPRO == HWType && wParam == gfmcppro_num)
+		{
+			LPGFMCPPROINPUTREPORT r = reinterpret_cast<LPGFMCPPROINPUTREPORT>(lParam);
+			std::cout << "M" << std::setw(8) << r->nADialVal << std::setw(8) << r->nBDialVal << std::setw(8) << r->nCDialVal
+				<< std::setw(8) << r->nDDialVal << std::setw(8) << r->nEDialVal << std::setw(8) << r->nFDialVal << std::hex << std::setw(10) << r->ulSwitchState << std::endl;
+			controls_block& ctr = global_controls_info.get_current_for_write();
+			fill_mcp_data(ctr, r);
+			global_controls_info.input_processed();
+			bInputProcessed = TRUE;
+		}
+		else if (GFDEVHWTYPE_GFEFIS == HWType  && wParam == gfefis_num)
+		{
+			LPGFEFISINPUTREPORT r = reinterpret_cast<LPGFEFISINPUTREPORT>(lParam);
+			std::cout << "E" << std::setw(8) << r->nADialVal << std::setw(8) << r->nBDialVal << std::setw(8) << std::hex << int(r->bSelectors)
+				<< std::hex << std::setw(10) << r->wSwitchState << std::endl;
+			controls_block& ctr = global_controls_info.get_current_for_write();
+			fill_efis_data(ctr, r);
+			global_controls_info.input_processed();
+			bInputProcessed = TRUE;
+		}
+		else
+		{
+			std::cout << "unknown input: " << HWType << '/' << wParam << std::endl;
 
 		}
+
+	}
 
 	return bInputProcessed;
 }
 //int _tmain(int argc, _TCHAR* argv[])
 
 
-void GFInitialUpdate()
+void GFInitialUpdate(int gfmcppro_num, int gfefis_num)
 {
 	controls_block& ctr = global_controls_info.get_current_for_write();
 	if (gfmcppro_num >= 0)
@@ -1335,7 +1442,7 @@ void GFInitialUpdate()
 
 
 
-void process_input(HANDLE hSimConnect, const controls_block& controls, mcppro_display_747& mcppro )
+void process_input(HANDLE hSimConnect, const controls_block& controls, mcppro_display_747& mcppro, int gfmcppro_num, int gfefis_num)
 {
     const SIMCONNECT_OBJECT_ID obj = SIMCONNECT_OBJECT_ID_USER;
     const SIMCONNECT_NOTIFICATION_GROUP_ID gid = SIMCONNECT_GROUP_PRIORITY_HIGHEST;
@@ -1529,9 +1636,10 @@ int main(int argc, char* argv[])
 		std::string config;
         mcppro_display_747 mcppro;
         controls_block controls;
-        gfmcppro_num = GFMCPPro_GetNumDevices() - 1;
-		gfefis_num = GFEFIS_GetNumDevices() - 1;
+		int gfmcppro_num = -1;
+		int gfefis_num = -1;
 
+  
 		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
 		{
 			printf("\nConnected to Flight Simulator!");
@@ -1541,21 +1649,60 @@ int main(int argc, char* argv[])
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-			GFInitialUpdate();
-			GFDev_RegisterInputCallback( InputCallback ); // Tell API to notify us on input
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
+			SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+
+			GFDev_RegisterConnectCallback(ConnectCallback);
+
+			bool aircraft_reload = false;
+
 			while( 0 == quit )
 			{
 				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, &mcppro);
-                if (gfmcppro_num >= 0)
-                {
-                    mcppro.update_mcppro(gfmcppro_num);
-                }
-				if (mcppro.is_initialized())
+				
+				switch (mcppro.get_pmdg747_loaded())
 				{
-					if (global_controls_info.get_new_input(controls, 1000))
+				case mcppro_display_747::PMDG747_UNLOADED:
+					std::cout << "747 Unloaded" << std::endl;
+					GFDev_UnregisterInputCallback();
+				case mcppro_display_747::PMDG747_NOTLOADED:
+					Sleep(100);
+					break;
+				case mcppro_display_747::PMDG747_JUSTLOADED:
+					std::cout << "747 loaded" << std::endl;
+					aircraft_reload = true;
+				case mcppro_display_747::PMDG747_LOADED:					
+					if (global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num))
 					{
-						process_input(hSimConnect, controls, mcppro);
+						GFInitialUpdate(gfmcppro_num, gfefis_num);
+						GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input
+						std::cout << "update" << std::endl;
 					}
+					if (gfmcppro_num >= 0)
+					{
+						mcppro.update_mcppro(gfmcppro_num);
+					}
+					//std::cout << "devices" << gfmcppro_num << "/" << gfefis_num << std::endl;
+					if (gfmcppro_num < 0 && gfefis_num < 0)
+					{
+						Sleep(100);
+						break;
+					}
+					if (mcppro.is_initialized())
+					{
+						if (global_controls_info.get_new_input(controls, 50000) || aircraft_reload)
+						{
+							process_input(hSimConnect, controls, mcppro, gfmcppro_num, gfefis_num);
+							aircraft_reload = false;
+						}
+					}
+					else
+					{
+						aircraft_reload = true;
+					}
+					break;
+				default:
+					std::cout << "unknown state " << std::endl;
 				}
 			}
 			hr = SimConnect_Close(hSimConnect);
