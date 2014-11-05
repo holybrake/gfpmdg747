@@ -140,9 +140,17 @@ class controls_info
     std::mutex mtx;
 	std::mutex hardware_mtx;
     std::condition_variable cv;
-    int current;
+    int current_write;
+    int current_read;
     bool has_new;
-    controls_block controls[2];
+    static const int controls_size = 3;
+    controls_block controls[controls_size];
+
+    static int get_next(int current) 
+    {
+        return (current + 1) % controls_size;
+    }
+
 	bool hardware_changed;
 	int gfmcppro_num;
 	int gfefis_num;
@@ -151,7 +159,7 @@ class controls_info
     bool is_init;
 
 public:
-	controls_info() : current(0), has_new(false), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1), is_init(false), hSimConnect(INVALID_HANDLE_VALUE);
+	controls_info() : current_write(0), current_read(2), has_new(false), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1), is_init(false), hSimConnect(INVALID_HANDLE_VALUE);
     {
     }
 	~controls_info()
@@ -201,9 +209,10 @@ public:
 		efisnum = gfefis_num;
 	}
 
-
-    bool get_new_input(controls_block & out, unsigned int timeout_us = 0)
+    bool get_new_input(unsigned int timeout_us = 0)
     {
+//        if (::W)
+
         std::unique_lock<std::mutex> lck(mtx);
         if (!has_new)
         {
@@ -216,24 +225,31 @@ public:
                 return false;
             }
         }
-        out = controls[current];
+        
+        int next = get_next(current_read);
+        current_read  = next;
         has_new = false;
         return true;
     }
     controls_block& get_current_for_write()
     {
         std::unique_lock<std::mutex> lck(mtx);
-        return controls[current?0:1];
+        return controls[current_write];
+    }
+    controls_block& get_current_for_read()
+    {
+        std::unique_lock<std::mutex> lck(mtx);
+        return controls[current_read];
     }
     void input_processed()
     {
         std::unique_lock<std::mutex> lck(mtx);
         if (!has_new)
         {
-            int next = current?0:1;
-            controls[current].state = controls[next].state;
-            controls[current].cmd.clear();
-            current = next;
+            int next = get_next(current_write);
+            controls[next].state = controls[current_write].state;
+            controls[next].cmd.clear();
+            current_write = next;
             has_new = true;
 			cv.notify_all();
         }
@@ -1520,9 +1536,9 @@ bool process_mcppro(mcppro_display_747 & mcppro) //returns true if goFlight hard
             }
             if (mcppro.is_initialized())
             {
-                if (global_controls_info.get_new_input(controls, 50000) || mcppro.need_panel_state_update())
+                if (global_controls_info.get_new_input(50000) || mcppro.need_panel_state_update())
                 {
-                    process_input(hSimConnect, controls, mcppro, gfmcppro_num, gfefis_num);
+                    process_input(hSimConnect, global_controls_info.get_current_for_read(), mcppro, gfmcppro_num, gfefis_num);
                 }
             }
             return true;
