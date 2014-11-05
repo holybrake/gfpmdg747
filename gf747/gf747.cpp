@@ -166,6 +166,16 @@ public:
 		::CloseHandle(has_new);
         if (is_init)
         {
+			if (gfmcppro_num >= 0)
+			{
+				GFMCPPro_SetADisplayText(gfmcppro_num, "   ");
+				GFMCPPro_SetBDisplayText(gfmcppro_num, "     ");
+				GFMCPPro_SetCDisplayText(gfmcppro_num, "     ");
+				GFMCPPro_SetDDisplayText(gfmcppro_num, "     ");
+				GFMCPPro_SetEDisplayText(gfmcppro_num, "     ");
+				GFMCPPro_SetFDisplayText(gfmcppro_num, "   ");
+				GFMCPPro_SetIndicators(gfmcppro_num, 0);
+			}			
             GFDev_Terminate();
         }
 	}
