@@ -147,23 +147,35 @@ class controls_info
 	int gfmcppro_num;
 	int gfefis_num;
 	HINSTANCE hInstance;
+    HANDLE hSimConnect;
+    bool is_init;
 
 public:
-	controls_info() : current(0), has_new(false), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1)
+	controls_info() : current(0), has_new(false), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1), is_init(false), hSimConnect(INVALID_HANDLE_VALUE);
     {
     }
 	~controls_info()
 	{
-		GFDev_Terminate();
+        if (is_init)
+        {
+            GFDev_Terminate();
+        }
 	}
-	void init(HINSTANCE hInst)
+	void init(HINSTANCE hInst, hSimCon)
 	{
+        is_init = true;
 		hInstance = hInst;
+        hSimConnect = hSimCon;
 		GFDev_Init(hInst);
 	}
+
+    HANDLE get_SimConnect() const
+    {
+        return hSimConnect;
+    }
+
 	void on_hardware_changed()
 	{
-		std::cout << "onconnect" << std::endl;		
 		hardware_changed = true;
 		GFDev_Terminate();
 		GFDev_Init(hInstance);
@@ -656,8 +668,10 @@ enum sim_events
     EVENT_SIM_UNPAUSED,
     EVENT_AIRCRAFT_LOADED,
 	EVENT_FLIGHT_LOADED,
+    EVENT_6HZ,
 	EVENT_MENU_ROOT,
 	EVENT_MENU_RESTART,
+
 
     IFACE_EVENTS_START = 100,
     EFISCaptainPressMINS,
@@ -1003,216 +1017,6 @@ void traceerror(HRESULT hr, LPCWSTR tsz)
 	}
 }
 
-std::map<int, int> int_storage;
-std::map<int, double> double_storage;
-std::map<int, int> offset_storage;
-void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt)
-{
-    HRESULT hr;
-
-    mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747 *>(ctxt);
-
-	//std::cout << "Pdata id=" << pData->dwID << std::endl;
-    switch(pData->dwID)
-    {
-		case SIMCONNECT_RECV_ID_OPEN:
-		{
-			break;
-		}
-
-        case SIMCONNECT_RECV_ID_EVENT:
-        {
-            SIMCONNECT_RECV_EVENT *evt = (SIMCONNECT_RECV_EVENT*)pData;
-			SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)evt;
-			switch(evt->uEventID)
-            {
-                case EVENT_SIM_START:
-                    std::cout << "\nSIMSTART" << std::endl;
-					break;
-				case EVENT_SIM_PAUSED:
-					std::cout << "\nPaused" << std::endl;
-
-					break;
-				case EVENT_SIM_UNPAUSED:
-                    std::cout << "\nUnpaused" << std::endl;
-					mcp->on_unpaused();
-                    break;
-				case EVENT_SIM_STOP:
-					std::cout << "\nSIMSTOP" << std::endl;
-					break;
-				case EVENT_MENU_RESTART:
-					global_controls_info.on_hardware_changed();
-					break;
-				case EVENT_MENU_ROOT:
-					break;
-				default:
-				   std::cout << "EVENT " << evt->uEventID << std::endl;
-                   break;
-            }
-            break;
-
-        }
-
-		case SIMCONNECT_RECV_ID_CLIENT_DATA:
-		{
-			SIMCONNECT_RECV_CLIENT_DATA *pObjData = (SIMCONNECT_RECV_CLIENT_DATA*)pData;
-            int	count	= 0;
-			BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
-
-			while (count < (int) pObjData->dwDefineCount)
-			{
-				int id = *reinterpret_cast<int*>(pD);
-				pD += sizeof(int);
-				size_t tsize = sizeof(int);
-				if (id == MCPMach)
-				{
-					double val = *reinterpret_cast<double*>(pD);
-                    //std::cout << id << "/" << val << std::endl;
-					tsize = sizeof(double);
-                    mcp->set_mach(val);
-				}
-                else
-				{
-					int val = *reinterpret_cast<int*>(pD);
-					std::cout << std::dec << id << "/" << val << std::endl;
-                    switch (id)
-                    {
-                        case EFISBaro:
-                            mcp->sim_controls_state.baro_sw = val;
-                            break;
-                        case EFISMins:
-                            mcp->sim_controls_state.min_sw = val;
-                            break;
-                        case EFISNavL:
-                            mcp->sim_controls_state.nav_l = val;
-                            break;
-                        case EFISNavR:
-                            mcp->sim_controls_state.nav_r = val;
-                            break;
-                        case EFISNDMode:
-                            mcp->sim_controls_state.nd_mode = val;
-                            break;
-                        case EFISNDRange:
-                            mcp->sim_controls_state.nd_range = val;
-                            break;
-
-                        case MCPHdg:
-                            mcp->set_hdg(val);
-                            break;
-                        case MCPIas:
-                            mcp->set_ias(val);
-                            break;
-                        case MCPAlt:
-                            mcp->set_alt(val);
-                            break;
-                        case MCPVS:
-//                            mcp->set_vs(val);
-                            break;
-                        case MCPPanelState:
-                            mcp->set_panel_state(val);
-                            mcp->sim_controls_state.fd_l         = (val & 0x00000010u) ? 1 : 0;
-                            mcp->sim_controls_state.fd_r         = (val & 0x00000020u) ? 1 : 0;
-                            mcp->sim_controls_state.at_arm       = (val & 0x00000040u) ? 1 : 0;
-                            mcp->sim_controls_state.ap_disengage = (val & 0x00000008u) ? 1 : 0;
-                            break;
-                        case MACH_IAS:
-                            mcp->set_mach_ias(val);
-                            break;
-						case AP_BANK_LIM:
-							mcp->set_bank_lim(val);
-							break;
-						case AP_VS:
-							mcp->set_vs(val);
-							break;
-                        default:
-                            break;
-                    }
-				}
-				pD += tsize;
-				++count;
-			}
-			break;
-		}
-
-		case SIMCONNECT_RECV_ID_EVENT_FILENAME:
-		{
-			SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)pData;
-			switch(ev_f->uEventID)
-			{
-				case EVENT_AIRCRAFT_LOADED:
-					mcp->set_pmdg747_loaded(is_pmdg747_loaded(ev_f->szFileName));
-					mcp->onreload();
-					std::cout << "\nAircraftLoaded" << std::endl;
-					break;
-				case EVENT_FLIGHT_LOADED:
-					mcp->onreload();
-					std::cout << "\nFlightLoaded" << std::endl;
-					break;
-                default:
-                   break;
-            }
-            break;
-
-        }
-		
-		case SIMCONNECT_RECV_ID_SYSTEM_STATE:
-		{
-			SIMCONNECT_RECV_SYSTEM_STATE * ptr = (SIMCONNECT_RECV_SYSTEM_STATE*)pData;
-			switch(ptr->dwRequestID)
-			{
-                case EVENT_SIM_START:
-                    std::cout << "\nSTART" << std::endl;
-                    break;
-				case EVENT_AIRCRAFT_LOADED:
-					mcp->set_pmdg747_loaded(is_pmdg747_loaded(ptr->szString));
-					mcp->onreload();					
-					break;
-                default:
-					break;
-            }
-            break;
-		}
-		
-
-        case SIMCONNECT_RECV_ID_SIMOBJECT_DATA:
-        {
-            SIMCONNECT_RECV_SIMOBJECT_DATA *pObjData = (SIMCONNECT_RECV_SIMOBJECT_DATA*)pData;
-            
-            switch(pObjData->dwRequestID)
-            {
-                case REQUEST_DATA:
-				case REQUEST_VISIBLE:
-  				case REQUEST_LED:
-				{
-					int	count	= 0;
-					BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
-					while (count < (int) pObjData->dwDefineCount)
-					{
-						int id = *reinterpret_cast<int*>(pD);
-						pD += sizeof(int);
-					}
-                    break;
-                }
-
-				default:
-                   break;
-            }
-            break;
-        }
-
-
-        case SIMCONNECT_RECV_ID_QUIT:
-        {
-            quit = 1;
-            break;
-        }
-
-        default:
-            printf("Unknown dwID: %d\n",pData->dwID);
-            break;
-    }
-
-}
 
 
 
@@ -1428,12 +1232,7 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
     ctx.ulSwitchState = r->ulSwitchState;
 }
 
-static BOOL ConnectCallback(GFDEV_HW_TYPE HWType, unsigned short wParam, GFDEV_EVENT_TOKEN event)
-{
-	GFDev_UnregisterInputCallback();
-	global_controls_info.on_hardware_changed();	
-	return TRUE;
-}
+
 
 static BOOL InputCallback( GFDEV_HW_TYPE HWType, unsigned short wParam, LPGFINPUTREPORTTYPE lParam )
 {
@@ -1495,6 +1294,21 @@ void GFInitialUpdate(int gfmcppro_num, int gfefis_num)
 		fill_efis_data(ctr, &r);
 	}
 	global_controls_info.input_processed();
+}
+
+void remove_menu()
+{
+	SimConnect_MenuDeleteItem(global_controls_info.get_SimConnect(), EVENT_MENU_ROOT);
+}
+void add_menu()
+{
+    HANDLE hSimConnect = global_controls_info.get_SimConnect();
+	remove_menu(hSimConnect);
+	HRESULT hr = SimConnect_MenuAddItem(hSimConnect, "GF<->747 &Interface", EVENT_MENU_ROOT, 0);
+	if (hr == S_OK)
+	{
+		SimConnect_MenuAddSubItem(hSimConnect, EVENT_MENU_ROOT, "&Restart GFDev", EVENT_MENU_RESTART, 0);
+	}
 }
 
 
@@ -1671,25 +1485,266 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, mcppro_di
 
 }
 
-    /*				if (!(j % 1000)){
-					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER, EFISCaptainPressBARO,
-		j/1000 - 10, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+
+bool process_mcppro(mcppro_display_747 & mcppro) //returns true if goFlight hardware processing performs
+{
+    int gfmcppro_num = -1;
+    int gfefis_num = -1;
+    static controls_block controls;
+
+    switch (mcppro.get_pmdg747_loaded())
+    {
+        case mcppro_display_747::PMDG747_UNLOADED:
+            std::cout << "747 Unloaded" << std::endl;
+            remove_menu();
+            GFDev_UnregisterInputCallback();
+        case mcppro_display_747::PMDG747_NOTLOADED:
+            break;
+        case mcppro_display_747::PMDG747_JUSTLOADED:
+            std::cout << "747 loaded" << std::endl;
+            add_menu();
+        case mcppro_display_747::PMDG747_LOADED:
+            if (global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num))
+            {
+                GFInitialUpdate(gfmcppro_num, gfefis_num);
+                GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input
+                mcppro.invalidate();
+            }
+            if (gfmcppro_num >= 0)
+            {
+                mcppro.update_mcppro(gfmcppro_num);
+            }
+            if (gfmcppro_num < 0 && gfefis_num < 0)
+            {
+                break;
+            }
+            if (mcppro.is_initialized())
+            {
+                if (global_controls_info.get_new_input(controls, 50000) || mcppro.need_panel_state_update())
+                {
+                    process_input(hSimConnect, controls, mcppro, gfmcppro_num, gfefis_num);
+                }
+            }
+            return true;
+        default:
+            std::cout << "unknown state " << std::endl;
+    }
+    return false;
+}
+
+
+void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt)
+{
+    HRESULT hr;
+
+    static mcppro_display_747 mcppro;
+
+    mcppro_display_747 * mcp = &mcppro;
+
+    switch(pData->dwID)
+    {
+		case SIMCONNECT_RECV_ID_OPEN:
+		{
+			break;
+		}
+
+        case SIMCONNECT_RECV_ID_EVENT:
+        {
+            SIMCONNECT_RECV_EVENT *evt = (SIMCONNECT_RECV_EVENT*)pData;
+			SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)evt;
+			switch(evt->uEventID)
+            {
+                case EVENT_SIM_START:
+                    std::cout << "\nSIMSTART" << std::endl;
+					break;
+				case EVENT_SIM_PAUSED:
+					std::cout << "\nPaused" << std::endl;
+
+					break;
+				case EVENT_SIM_UNPAUSED:
+                    std::cout << "\nUnpaused" << std::endl;
+					mcp->on_unpaused();
+                    break;
+				case EVENT_SIM_STOP:
+					std::cout << "\nSIMSTOP" << std::endl;
+					break;
+				case EVENT_MENU_RESTART:
+					global_controls_info.on_hardware_changed();
+					break;
+				case EVENT_MENU_ROOT:
+					break;
+                case EVENT_6HZ:
+                    process_mcppro(mcppro);
+                    break;
+				default:
+				   std::cout << "EVENT " << evt->uEventID << std::endl;
+                   break;
+            }
+            break;
+
+        }
+
+		case SIMCONNECT_RECV_ID_CLIENT_DATA:
+		{
+			SIMCONNECT_RECV_CLIENT_DATA *pObjData = (SIMCONNECT_RECV_CLIENT_DATA*)pData;
+            int	count	= 0;
+			BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
+
+			while (count < (int) pObjData->dwDefineCount)
+			{
+				int id = *reinterpret_cast<int*>(pD);
+				pD += sizeof(int);
+				size_t tsize = sizeof(int);
+				if (id == MCPMach)
+				{
+					double val = *reinterpret_cast<double*>(pD);
+                    //std::cout << id << "/" << val << std::endl;
+					tsize = sizeof(double);
+                    mcp->set_mach(val);
 				}
-				++j;
-				*/
-void remove_menu(HANDLE hSimConnect)
-{
-	SimConnect_MenuDeleteItem(hSimConnect, EVENT_MENU_ROOT);
+                else
+				{
+					int val = *reinterpret_cast<int*>(pD);
+					std::cout << std::dec << id << "/" << val << std::endl;
+                    switch (id)
+                    {
+                        case EFISBaro:
+                            mcp->sim_controls_state.baro_sw = val;
+                            break;
+                        case EFISMins:
+                            mcp->sim_controls_state.min_sw = val;
+                            break;
+                        case EFISNavL:
+                            mcp->sim_controls_state.nav_l = val;
+                            break;
+                        case EFISNavR:
+                            mcp->sim_controls_state.nav_r = val;
+                            break;
+                        case EFISNDMode:
+                            mcp->sim_controls_state.nd_mode = val;
+                            break;
+                        case EFISNDRange:
+                            mcp->sim_controls_state.nd_range = val;
+                            break;
+
+                        case MCPHdg:
+                            mcp->set_hdg(val);
+                            break;
+                        case MCPIas:
+                            mcp->set_ias(val);
+                            break;
+                        case MCPAlt:
+                            mcp->set_alt(val);
+                            break;
+                        case MCPVS:
+//                            mcp->set_vs(val);
+                            break;
+                        case MCPPanelState:
+                            mcp->set_panel_state(val);
+                            mcp->sim_controls_state.fd_l         = (val & 0x00000010u) ? 1 : 0;
+                            mcp->sim_controls_state.fd_r         = (val & 0x00000020u) ? 1 : 0;
+                            mcp->sim_controls_state.at_arm       = (val & 0x00000040u) ? 1 : 0;
+                            mcp->sim_controls_state.ap_disengage = (val & 0x00000008u) ? 1 : 0;
+                            break;
+                        case MACH_IAS:
+                            mcp->set_mach_ias(val);
+                            break;
+						case AP_BANK_LIM:
+							mcp->set_bank_lim(val);
+							break;
+						case AP_VS:
+							mcp->set_vs(val);
+							break;
+                        default:
+                            break;
+                    }
+				}
+				pD += tsize;
+				++count;
+			}
+			break;
+		}
+
+		case SIMCONNECT_RECV_ID_EVENT_FILENAME:
+		{
+			SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)pData;
+			switch(ev_f->uEventID)
+			{
+				case EVENT_AIRCRAFT_LOADED:
+					mcp->set_pmdg747_loaded(is_pmdg747_loaded(ev_f->szFileName));
+					mcp->onreload();
+					std::cout << "\nAircraftLoaded" << std::endl;
+					break;
+				case EVENT_FLIGHT_LOADED:
+					mcp->onreload();
+					std::cout << "\nFlightLoaded" << std::endl;
+					break;
+                default:
+                   break;
+            }
+            break;
+
+        }
+		
+		case SIMCONNECT_RECV_ID_SYSTEM_STATE:
+		{
+			SIMCONNECT_RECV_SYSTEM_STATE * ptr = (SIMCONNECT_RECV_SYSTEM_STATE*)pData;
+			switch(ptr->dwRequestID)
+			{
+                case EVENT_SIM_START:
+                    std::cout << "\nSTART" << std::endl;
+                    break;
+				case EVENT_AIRCRAFT_LOADED:
+					mcp->set_pmdg747_loaded(is_pmdg747_loaded(ptr->szString));
+					mcp->onreload();					
+					break;
+                default:
+					break;
+            }
+            break;
+		}
+		
+
+        case SIMCONNECT_RECV_ID_SIMOBJECT_DATA:
+        {
+            SIMCONNECT_RECV_SIMOBJECT_DATA *pObjData = (SIMCONNECT_RECV_SIMOBJECT_DATA*)pData;
+            
+            switch(pObjData->dwRequestID)
+            {
+                case REQUEST_DATA:
+				case REQUEST_VISIBLE:
+  				case REQUEST_LED:
+				{
+					int	count	= 0;
+					BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
+					while (count < (int) pObjData->dwDefineCount)
+					{
+						int id = *reinterpret_cast<int*>(pD);
+						pD += sizeof(int);
+					}
+                    break;
+                }
+
+				default:
+                   break;
+            }
+            break;
+        }
+
+
+        case SIMCONNECT_RECV_ID_QUIT:
+        {
+            quit = 1;
+            break;
+        }
+
+        default:
+            printf("Unknown dwID: %d\n",pData->dwID);
+            break;
+    }
+
 }
-void add_menu(HANDLE hSimConnect)
-{
-	remove_menu(hSimConnect);
-	HRESULT hr = SimConnect_MenuAddItem(hSimConnect, "GF<->747 &Interface", EVENT_MENU_ROOT, 0);
-	if (hr == S_OK)
-	{
-		SimConnect_MenuAddSubItem(hSimConnect, EVENT_MENU_ROOT, "&Restart GFDev", EVENT_MENU_RESTART, 0);
-	}
-}
+
 
 
 
@@ -1697,21 +1752,16 @@ int main(int argc, char* argv[])
 {
 	SetConsoleCtrlHandler(ConsoleHandlerRoutine, TRUE);
 	HRESULT hr = NULL;
-	global_controls_info.init(::GetModuleHandle(NULL));
 
 	try
 	{
 		HANDLE hSimConnect;
-		std::string config;
-        mcppro_display_747 mcppro;
-        controls_block controls;
-		int gfmcppro_num = -1;
-		int gfefis_num = -1;
-
   
 		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
 		{
+
 			printf("\nConnected to Flight Simulator!\n");
+            global_controls_info.init(::GetModuleHandle(NULL), hSimConnect);
             map_747_vars(hSimConnect);
             map_747_events(hSimConnect);
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
@@ -1720,58 +1770,17 @@ int main(int argc, char* argv[])
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "6Hz");
+
 			SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
 
-			//GFDev_RegisterConnectCallback(ConnectCallback);
 
 			bool aircraft_reload = false;
 
 			while( 0 == quit )
 			{
-				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, &mcppro);
-				
-				switch (mcppro.get_pmdg747_loaded())
-				{
-				case mcppro_display_747::PMDG747_UNLOADED:
-					std::cout << "747 Unloaded" << std::endl;
-					remove_menu(hSimConnect);
-					GFDev_UnregisterInputCallback();
-				case mcppro_display_747::PMDG747_NOTLOADED:
-					Sleep(100);
-					break;
-				case mcppro_display_747::PMDG747_JUSTLOADED:
-					std::cout << "747 loaded" << std::endl;
-					add_menu(hSimConnect);					
-				case mcppro_display_747::PMDG747_LOADED:					
-					if (global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num))
-					{
-						GFInitialUpdate(gfmcppro_num, gfefis_num);
-						GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input
-						std::cout << "update" << std::endl;
-						mcppro.invalidate();
-					}
-					if (gfmcppro_num >= 0)
-					{
-						mcppro.update_mcppro(gfmcppro_num);
-					}
-					//std::cout << "devices" << gfmcppro_num << "/" << gfefis_num << std::endl;
-					if (gfmcppro_num < 0 && gfefis_num < 0)
-					{
-						Sleep(100);
-						break;
-					}
-					if (mcppro.is_initialized())
-					{
-						if (global_controls_info.get_new_input(controls, 50000) || mcppro.need_panel_state_update())
-						{
-							process_input(hSimConnect, controls, mcppro, gfmcppro_num, gfefis_num);
-						}
-					}
-					break;
-				default:
-					std::cout << "unknown state " << std::endl;
-				}
-			}
+				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
+            }
 			hr = SimConnect_Close(hSimConnect);
 		}
 		else
