@@ -137,12 +137,9 @@ struct controls_block
 
 class controls_info
 {
-    std::mutex mtx;
 	std::mutex hardware_mtx;
-    std::condition_variable cv;
     int current_write;
     int current_read;
-    bool has_new;
     static const int controls_size = 3;
     controls_block controls[controls_size];
 
@@ -156,20 +153,23 @@ class controls_info
 	int gfefis_num;
 	HINSTANCE hInstance;
     HANDLE hSimConnect;
+	HANDLE has_new;
     bool is_init;
 
 public:
-	controls_info() : current_write(0), current_read(2), has_new(false), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1), is_init(false), hSimConnect(INVALID_HANDLE_VALUE);
+	controls_info() : current_write(0), current_read(2), hardware_changed(true), gfmcppro_num(-1), gfefis_num(-1), is_init(false), hSimConnect(INVALID_HANDLE_VALUE)
     {
+		has_new = ::CreateEvent(NULL, TRUE, FALSE, NULL);
     }
 	~controls_info()
 	{
+		::CloseHandle(has_new);
         if (is_init)
         {
             GFDev_Terminate();
         }
 	}
-	void init(HINSTANCE hInst, hSimCon)
+	void init(HINSTANCE hInst, HANDLE hSimCon)
 	{
         is_init = true;
 		hInstance = hInst;
@@ -209,49 +209,33 @@ public:
 		efisnum = gfefis_num;
 	}
 
-    bool get_new_input(unsigned int timeout_us = 0)
+    bool get_new_input(unsigned int timeout_ms = 0)
     {
-//        if (::W)
-
-        std::unique_lock<std::mutex> lck(mtx);
-        if (!has_new)
-        {
-            if (timeout_us)
-            {
-                cv.wait_for( lck, std::chrono::microseconds(timeout_us));
-            }
-            if(!has_new)
-            {
-                return false;
-            }
-        }
-        
-        int next = get_next(current_read);
-        current_read  = next;
-        has_new = false;
+		if (::WaitForSingleObject(has_new, timeout_ms) == WAIT_TIMEOUT)
+		{
+			return false;
+		}       
+        current_read = get_next(current_read);
+		::ResetEvent(has_new);
         return true;
     }
     controls_block& get_current_for_write()
     {
-        std::unique_lock<std::mutex> lck(mtx);
-        return controls[current_write];
+       return controls[current_write];
     }
     controls_block& get_current_for_read()
     {
-        std::unique_lock<std::mutex> lck(mtx);
         return controls[current_read];
     }
     void input_processed()
     {
-        std::unique_lock<std::mutex> lck(mtx);
-        if (!has_new)
+        if (::WaitForSingleObject(has_new, 0) == WAIT_TIMEOUT)
         {
             int next = get_next(current_write);
             controls[next].state = controls[current_write].state;
             controls[next].cmd.clear();
             current_write = next;
-            has_new = true;
-			cv.notify_all();
+            ::SetEvent(has_new);			
         }
     }
 };
@@ -618,7 +602,7 @@ public:
 				{
 					sprintf( szNumericMsg, " %3d", last_ias);
 				}
-				std::cout << szNumericMsg << std::endl;
+			//	std::cout << szNumericMsg << std::endl;
 				GFMCPPro_SetBDisplayText(devnum, szNumericMsg);
 			}
 			mach_ias_changed = false;
@@ -1312,13 +1296,12 @@ void GFInitialUpdate(int gfmcppro_num, int gfefis_num)
 	global_controls_info.input_processed();
 }
 
-void remove_menu()
+void remove_menu(HANDLE hSimConnect)
 {
-	SimConnect_MenuDeleteItem(global_controls_info.get_SimConnect(), EVENT_MENU_ROOT);
+	SimConnect_MenuDeleteItem(hSimConnect, EVENT_MENU_ROOT);
 }
-void add_menu()
+void add_menu(HANDLE hSimConnect)
 {
-    HANDLE hSimConnect = global_controls_info.get_SimConnect();
 	remove_menu(hSimConnect);
 	HRESULT hr = SimConnect_MenuAddItem(hSimConnect, "GF<->747 &Interface", EVENT_MENU_ROOT, 0);
 	if (hr == S_OK)
@@ -1506,19 +1489,19 @@ bool process_mcppro(mcppro_display_747 & mcppro) //returns true if goFlight hard
 {
     int gfmcppro_num = -1;
     int gfefis_num = -1;
-    static controls_block controls;
+    HANDLE hSimConnect = global_controls_info.get_SimConnect();
 
     switch (mcppro.get_pmdg747_loaded())
     {
         case mcppro_display_747::PMDG747_UNLOADED:
             std::cout << "747 Unloaded" << std::endl;
-            remove_menu();
+			remove_menu(hSimConnect);
             GFDev_UnregisterInputCallback();
         case mcppro_display_747::PMDG747_NOTLOADED:
             break;
         case mcppro_display_747::PMDG747_JUSTLOADED:
             std::cout << "747 loaded" << std::endl;
-            add_menu();
+			add_menu(hSimConnect);
         case mcppro_display_747::PMDG747_LOADED:
             if (global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num))
             {
@@ -1536,7 +1519,7 @@ bool process_mcppro(mcppro_display_747 & mcppro) //returns true if goFlight hard
             }
             if (mcppro.is_initialized())
             {
-                if (global_controls_info.get_new_input(50000) || mcppro.need_panel_state_update())
+                if (global_controls_info.get_new_input(50) || mcppro.need_panel_state_update())
                 {
                     process_input(hSimConnect, global_controls_info.get_current_for_read(), mcppro, gfmcppro_num, gfefis_num);
                 }
@@ -1553,9 +1536,10 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 {
     HRESULT hr;
 
-    static mcppro_display_747 mcppro;
+    //static mcppro_display_747 mcppro;
 
-    mcppro_display_747 * mcp = &mcppro;
+//mcppro_display_747 * mcp = &mcppro;
+	mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747*>(ctxt);
 
     switch(pData->dwID)
     {
@@ -1590,7 +1574,6 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 				case EVENT_MENU_ROOT:
 					break;
                 case EVENT_6HZ:
-                    process_mcppro(mcppro);
                     break;
 				default:
 				   std::cout << "EVENT " << evt->uEventID << std::endl;
@@ -1772,6 +1755,7 @@ int main(int argc, char* argv[])
 	try
 	{
 		HANDLE hSimConnect;
+		mcppro_display_747 mcppro;
   
 		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
 		{
@@ -1787,6 +1771,7 @@ int main(int argc, char* argv[])
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
 			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "6Hz");
+//			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "Frame");
 
 			SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
 
@@ -1795,7 +1780,11 @@ int main(int argc, char* argv[])
 
 			while( 0 == quit )
 			{
-				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
+				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, &mcppro);
+				if (!process_mcppro(mcppro))
+				{
+					Sleep(100);
+				}
             }
 			hr = SimConnect_Close(hSimConnect);
 		}
