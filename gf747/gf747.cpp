@@ -1565,7 +1565,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, const con
 }
 
 
-bool process_mcppro(mcppro_display_747 & mcppro) //returns true if goFlight hardware processing performs
+bool process_mcppro() //returns true if goFlight hardware processing performs
 {
     int gfmcppro_num = -1;
     int gfefis_num = -1;
@@ -1884,7 +1884,7 @@ int main(int argc, char* argv[])
 			while( 0 == quit )
 			{
 				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, &mcppro);
-				if (!process_mcppro(mcppro))
+				if (!process_mcppro())
 				{
 					Sleep(100);
 				}
