@@ -45,6 +45,126 @@ enum event_groups
 };
 
 
+
+enum sim_events
+{
+	EVENT_SIM_START,
+	EVENT_SIM_STOP,
+	EVENT_SIM_PAUSED,
+	EVENT_SIM_UNPAUSED,
+	EVENT_AIRCRAFT_LOADED,
+	EVENT_FLIGHT_LOADED,
+	EVENT_6HZ,
+	EVENT_HAS_INPUT,
+	EVENT_MENU_ROOT,
+	EVENT_MENU_RESTART,
+
+
+	IFACE_EVENTS_START = 100,
+	EFISCaptainPressMINS,
+	EFISCaptainIncreaseMINS,
+	EFISCaptainDecreaseMINS,
+	EFISCaptainResetMINS,
+	EFISCaptainPressBARO,
+	EFISCaptainIncreaseBARO,
+	EFISCaptainDecreaseBARO,
+	EFISCaptainPressBAROSTD,
+	EFISCaptainPressFPV,
+	EFISCaptainPressMTRS,
+	EFISCaptainIncreaseNAVL,
+	EFISCaptainDecreaseNAVL,
+	EFISCaptainIncreaseNAVR,
+	EFISCaptainDecreaseNAVR,
+	EFISCaptainIncreaseNDMODE,
+	EFISCaptainDecreaseNDMODE,
+	EFISCaptainPressNDMODECTR,
+	EFISCaptainIncreaseNDRANGE,
+	EFISCaptainDecreaseNDRANGE,
+	EFISCaptainPressNDRANGETFC,
+	EFISCaptainPressWXR,
+	EFISCaptainPressSTA,
+	EFISCaptainPressWPT,
+	EFISCaptainPressARPT,
+	EFISCaptainPressDATA,
+	EFISCaptainPressPOS,
+	EFISCaptainPressTERR,
+	EFISCaptainSetMINS,
+	EFISCaptainSetBARO,
+	EFISCaptainSetNAVL,
+	EFISCaptainSetNAVR,
+	EFISCaptainSetNDMODE,
+	EFISCaptainSetNDRANGE,
+	MCPPressATArm,
+	MCPPressN1,
+	MCPPressTHR,
+	MCPPressSPD,
+	MCPPressCO,
+	MCPPressFLCH,
+	MCPPressVNAV,
+	MCPPressLNAV,
+	MCPPressVORLOC,
+	MCPPressAPP,
+	MCPPressHDGSEL,
+	MCPPressHDGHOLD,
+	MCPPressALTHOLD,
+	MCPPressVS,
+	MCPPressCMDL,
+	MCPPressCMDC,
+	MCPPressCMDR,
+	MCPPressFDL,
+	MCPPressFDR,
+	MCPPressAPDiseng,
+	MCPIncreaseBankLimiter,
+	MCPDecreaseBankLimiter,
+	MCPIncreaseAlt,
+	MCPDecreaseAlt,
+	MCPIncreaseSpd,
+	MCPDecreaseSpd,
+	MCPIncreaseHdg,
+	MCPDecreaseHdg,
+	MCPIncreaseVS,
+	MCPDecreaseVS,
+	MCPSetTOGA,
+	MCPResetTOGA,
+	MCPPressSpdIntv,
+	MCPPressAltIntv,
+	MCPPressCMD,
+	MCPPressCWS,
+	MCPPressFD,
+	MCPPressTOGA,
+	MCPPressBankLimiter,
+	MCPSetAltitude,
+	MCPSetSpeed,
+	MCPSetHeading,
+	MCPSetVS,
+	MCPSetFDL,
+	MCPSetFDR
+};
+
+enum sim_data
+{
+	EFISBaro,
+	EFISMins,
+	EFISNavL,
+	EFISNavR,
+	EFISNDMode,
+	EFISNDCenter,
+	EFISNDRange,
+	MCPHdg,
+	MCPIas,
+	MCPMach,
+	MCPAlt,
+	MCPVS,
+	MCPPanelState,
+	MACH_IAS,
+	AP_BANK_LIM,
+	AP_VS
+};
+
+
+
+
+
 struct controls_state
 {
     controls_state()
@@ -163,6 +283,7 @@ private:
 	int gfefis_num;
 	HINSTANCE hInstance;
 	HANDLE hSimConnect;
+	HANDLE hSimConnect2;
 	HANDLE has_new;
 	bool is_init;
 	bool panel_state_initialized;
@@ -170,21 +291,19 @@ private:
 	bool panel_state_update;
 	bool unpaused_time_ready;
 	std::chrono::high_resolution_clock::time_point unpaused_time;
-	controls_state sim_controls_state;
-	int show_bank;
-	bool disp_invalidate;
+
 public:
 
 	controls_info()
 		: current_write(0), current_read(2)
 		, hardware_changed(true), gfmcppro_num(-1)
-		, gfefis_num(-1), is_init(false), hSimConnect(INVALID_HANDLE_VALUE)
+		, gfefis_num(-1), is_init(false)
+		, hSimConnect(INVALID_HANDLE_VALUE)
+		, hSimConnect2(INVALID_HANDLE_VALUE)
 		, panel_state_initialized(false)
 		, pmdg_747_loaded(PMDG747_NOTLOADED)
 		, panel_state_update(false)
 		, unpaused_time_ready(false)
-		, show_bank(0)
-		, disp_invalidate(false)
 	{
 		has_new = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 	}
@@ -204,24 +323,21 @@ public:
 				GFMCPPro_SetIndicators(gfmcppro_num, 0);
 			}
 			GFDev_Terminate();
+			SimConnect_Close(hSimConnect);
+			SimConnect_Close(hSimConnect2);
 		}
 	}
-	void init(HINSTANCE hInst, HANDLE hSimCon)
+	void init(HINSTANCE hInst, HANDLE hSimCon, HANDLE hSimCon2)
 	{
 		is_init = true;
 		hInstance = hInst;
 		hSimConnect = hSimCon;
+		hSimConnect2 = hSimCon2;
 		GFDev_Init(hInst);
-	}
-
-	HANDLE get_SimConnect() const
-	{
-		return hSimConnect;
 	}
 
 	void on_panel_state()
 	{
-		std::unique_lock<std::mutex>(mtx);
 		panel_state_initialized = true;
 	}
 
@@ -237,35 +353,10 @@ public:
 			return true;
 		}
 		return false;
-
-	}
-	void set_show_bank(bool show)
-	{
-		std::unique_lock<std::mutex>(mtx);
-		if (show)
-		{
-			show_bank = 1;
-		}
-		else
-		{
-			show_bank = -1;
-		}
-
-	}
-
-	void get_display_data(int& mcpnum, bool& invalidate, int& bank)
-	{
-		std::unique_lock<std::mutex>(mtx);
-		mcpnum = gfmcppro_num;
-		invalidate = disp_invalidate;
-		bank = show_bank;
-		disp_invalidate = false;
-		show_bank = false;
 	}
 
 	void on_unpaused()
 	{
-		std::unique_lock<std::mutex>(mtx);
 		if (panel_state_update)
 		{
 			unpaused_time_ready = true;
@@ -273,19 +364,6 @@ public:
 		}
 	}
 	
-	void get_process_data(controls_state& controls_state, loaded_states& pmdg747_loaded)
-	{
-		std::unique_lock<std::mutex>(mtx);
-		controls_state = sim_controls_state;
-		pmdg747_loaded = get_pmdg747_loaded();
-	}
-
-	void set_controls_state(const controls_state& controls_state)
-	{
-		std::unique_lock<std::mutex>(mtx);
-		sim_controls_state = controls_state;
-	}
-
 	loaded_states get_pmdg747_loaded()
 	{
 		loaded_states ret = pmdg_747_loaded;
@@ -331,14 +409,12 @@ public:
 
 	void onreload()
 	{
-		std::unique_lock<std::mutex>(mtx);
 		panel_state_update = true;
 		panel_state_initialized = false;
 	}
 
 	void on_hardware_changed()
 	{
-		std::unique_lock<std::mutex> lck(mtx);
 		hardware_changed = true;
 		GFDev_Terminate();
 		GFDev_Init(hInstance);
@@ -352,7 +428,6 @@ public:
 			gfmcppro_num = GFMCPPro_GetNumDevices() - 1;
 			gfefis_num = GFEFIS_GetNumDevices() - 1;
 			hardware_changed = false;
-			disp_invalidate = true;
 		}
 		mcpnum = gfmcppro_num;
 		efisnum = gfefis_num;
@@ -367,18 +442,15 @@ public:
 
     bool get_new_input(unsigned int timeout_ms = 0)
     {
-		bool state_up = false;
-		{ 
-			std::unique_lock<std::mutex> lck(mtx);
-			if (!panel_state_initialized)
-			{
-				return false;
-			}
-			state_up = need_panel_state_update();
+
+		if (!panel_state_initialized)
+		{
+			return false;
 		}
+			
 		if (::WaitForSingleObject(has_new, timeout_ms) == WAIT_TIMEOUT)
 		{
-			return state_up;
+			return need_panel_state_update();;
 		}       
         current_read = get_next(current_read);
 		::ResetEvent(has_new);
@@ -402,6 +474,8 @@ public:
             current_write = next;
             ::SetEvent(has_new);			
         }
+		SimConnect_TransmitClientEvent(hSimConnect2, SIMCONNECT_OBJECT_ID_USER, 
+			EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
     }
 
 };
@@ -739,121 +813,6 @@ public:
     controls_state sim_controls_state;
 };
 
-enum sim_events
-{
-    EVENT_SIM_START,
-    EVENT_SIM_STOP,
-	EVENT_SIM_PAUSED,
-    EVENT_SIM_UNPAUSED,
-    EVENT_AIRCRAFT_LOADED,
-	EVENT_FLIGHT_LOADED,
-    EVENT_6HZ,
-	EVENT_MENU_ROOT,
-	EVENT_MENU_RESTART,
-
-
-    IFACE_EVENTS_START = 100,
-    EFISCaptainPressMINS,
-    EFISCaptainIncreaseMINS,
-    EFISCaptainDecreaseMINS,
-    EFISCaptainResetMINS,
-    EFISCaptainPressBARO,
-    EFISCaptainIncreaseBARO,
-    EFISCaptainDecreaseBARO,
-    EFISCaptainPressBAROSTD,
-    EFISCaptainPressFPV,
-    EFISCaptainPressMTRS,
-    EFISCaptainIncreaseNAVL,
-    EFISCaptainDecreaseNAVL,
-    EFISCaptainIncreaseNAVR,
-    EFISCaptainDecreaseNAVR,
-    EFISCaptainIncreaseNDMODE,
-    EFISCaptainDecreaseNDMODE,
-    EFISCaptainPressNDMODECTR,
-    EFISCaptainIncreaseNDRANGE,
-    EFISCaptainDecreaseNDRANGE,
-    EFISCaptainPressNDRANGETFC,
-    EFISCaptainPressWXR,
-    EFISCaptainPressSTA,
-    EFISCaptainPressWPT,
-    EFISCaptainPressARPT,
-    EFISCaptainPressDATA,
-    EFISCaptainPressPOS,
-    EFISCaptainPressTERR,
-    EFISCaptainSetMINS,
-    EFISCaptainSetBARO,
-    EFISCaptainSetNAVL,
-    EFISCaptainSetNAVR,
-    EFISCaptainSetNDMODE,
-    EFISCaptainSetNDRANGE,
-    MCPPressATArm,
-    MCPPressN1,
-    MCPPressTHR,
-    MCPPressSPD,
-    MCPPressCO,
-    MCPPressFLCH,
-    MCPPressVNAV,
-    MCPPressLNAV,
-    MCPPressVORLOC,
-    MCPPressAPP,
-    MCPPressHDGSEL,
-    MCPPressHDGHOLD,
-    MCPPressALTHOLD,
-    MCPPressVS,
-    MCPPressCMDL,
-    MCPPressCMDC,
-    MCPPressCMDR,
-    MCPPressFDL,
-    MCPPressFDR,
-    MCPPressAPDiseng,
-    MCPIncreaseBankLimiter,
-    MCPDecreaseBankLimiter,
-    MCPIncreaseAlt,
-    MCPDecreaseAlt,
-    MCPIncreaseSpd,
-    MCPDecreaseSpd,
-    MCPIncreaseHdg,
-    MCPDecreaseHdg,
-    MCPIncreaseVS,
-    MCPDecreaseVS,
-    MCPSetTOGA,
-    MCPResetTOGA,
-    MCPPressSpdIntv,
-    MCPPressAltIntv,
-    MCPPressCMD,
-    MCPPressCWS,
-    MCPPressFD,
-    MCPPressTOGA,
-    MCPPressBankLimiter,
-    MCPSetAltitude,
-    MCPSetSpeed,
-    MCPSetHeading,
-    MCPSetVS,
-    MCPSetFDL,
-    MCPSetFDR
-};
-
-enum sim_data
-{
-    EFISBaro,
-    EFISMins,
-    EFISNavL,
-    EFISNavR,
-    EFISNDMode,
-    EFISNDCenter,
-    EFISNDRange,
-    MCPHdg,
-    MCPIas,
-    MCPMach,
-    MCPAlt,
-    MCPVS,
-    MCPPanelState,
-    MACH_IAS,
-	AP_BANK_LIM,
-	AP_VS
-};
-
-
 
 
 namespace //globals
@@ -946,7 +905,8 @@ void map_747_events(HANDLE hSimConnect)
     SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetVS,               "PMDG.747-400.MCP.Set V/S");
     SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetFDL,              "PMDG.747-400.MCP.Set F/D L");
     SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetFDR,              "PMDG.747-400.MCP.Set F/D R");
-    SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainPressMINS);
+	/*
+	SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainPressMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainIncreaseMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainDecreaseMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainResetMINS);
@@ -1024,6 +984,7 @@ void map_747_events(HANDLE hSimConnect)
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,MCPSetVS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,MCPSetFDL);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,MCPSetFDR);
+	*/
 }
 
 void map_747_vars(HANDLE hSimConnect)
@@ -1392,7 +1353,7 @@ void add_menu(HANDLE hSimConnect)
 
 
 
-void process_input(HANDLE hSimConnect, const controls_block& controls, const controls_state& sim_controls_state, int gfmcppro_num, int gfefis_num)
+void process_input(HANDLE hSimConnect, const controls_block& controls, const controls_state& sim_controls_state, mcppro_display_747& mcppro, int gfmcppro_num, int gfefis_num)
 {
     const SIMCONNECT_OBJECT_ID obj = SIMCONNECT_OBJECT_ID_USER;
     const SIMCONNECT_NOTIFICATION_GROUP_ID gid = SIMCONNECT_GROUP_PRIORITY_HIGHEST;
@@ -1493,17 +1454,17 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, const con
 		
         if (controls.cmd.bank_inc )
         {
-			global_controls_info.set_show_bank(true);
+			mcppro.show_bank(true);			
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPIncreaseBankLimiter, 0 ,gid , flag );
         }
         if (controls.cmd.bank_dec )
         {
-			global_controls_info.set_show_bank(true);
+			mcppro.show_bank(true);
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPDecreaseBankLimiter, 0 ,gid , flag );
         }
         if (controls.cmd.bank_change_end )
         {
-			global_controls_info.set_show_bank(false);
+			mcppro.show_bank(false);
         }
 
         if (controls.cmd.alt_knob)
@@ -1565,16 +1526,11 @@ void process_input(HANDLE hSimConnect, const controls_block& controls, const con
 }
 
 
-bool process_mcppro() //returns true if goFlight hardware processing performs
+bool process_mcppro(HANDLE hSimConnect, const controls_state& sim_controls_state, mcppro_display_747& mcppro, controls_info::loaded_states pmdg747_loaded) //returns true if goFlight hardware processing performs
 {
     int gfmcppro_num = -1;
     int gfefis_num = -1;
-    HANDLE hSimConnect = global_controls_info.get_SimConnect();
-	controls_state sim_controls_state;
-	bool is_initialized = false;
-	bool need_panel_state_update = false;
-	controls_info::loaded_states pmdg747_loaded = controls_info::PMDG747_NOTLOADED;
-	global_controls_info.get_process_data(sim_controls_state, pmdg747_loaded);
+    	
 	switch (pmdg747_loaded)
     {
 	    case controls_info::PMDG747_UNLOADED:
@@ -1590,11 +1546,12 @@ bool process_mcppro() //returns true if goFlight hardware processing performs
             if (global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num))
             {
                 GFInitialUpdate(gfmcppro_num, gfefis_num);
-                GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input            
+                GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input 
+				mcppro.invalidate();
             }            
-			if (global_controls_info.get_new_input(50))
+			if (global_controls_info.get_new_input())
 			{
-				process_input(hSimConnect, global_controls_info.get_current_for_read(), sim_controls_state, gfmcppro_num, gfefis_num);
+				process_input(hSimConnect, global_controls_info.get_current_for_read(), sim_controls_state, mcppro, gfmcppro_num, gfefis_num);
 			}
             return true;
         default:
@@ -1608,10 +1565,10 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 {
     HRESULT hr;
 
-    //static mcppro_display_747 mcppro;
-
-//mcppro_display_747 * mcp = &mcppro;
-	mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747*>(ctxt);
+    static mcppro_display_747 mcppro;
+    mcppro_display_747 * mcp = &mcppro;
+	HANDLE hSimConnect = reinterpret_cast<HANDLE>(ctxt);
+	//mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747*>(ctxt);
 	bool display_update = false;
 
     switch(pData->dwID)
@@ -1649,6 +1606,10 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                 case EVENT_6HZ:
 					display_update = true;
                     break;
+				case EVENT_HAS_INPUT:
+					process_mcppro(hSimConnect, mcppro.sim_controls_state,
+						mcppro, global_controls_info.get_pmdg747_loaded());
+					break;
 				default:
 				   std::cout << "EVENT " << evt->uEventID << std::endl;
                    break;
@@ -1736,7 +1697,6 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 				pD += tsize;
 				++count;
 			}
-			global_controls_info.set_controls_state(mcp->sim_controls_state);
 			display_update = true;
 			break;
 		}
@@ -1749,6 +1709,9 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 				case EVENT_AIRCRAFT_LOADED:
 					global_controls_info.set_pmdg747_loaded(is_pmdg747_loaded(ev_f->szFileName));
 					global_controls_info.onreload();
+					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
+						EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+
 					std::cout << "\nAircraftLoaded" << std::endl;
 					break;
 				case EVENT_FLIGHT_LOADED:
@@ -1773,6 +1736,8 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 				case EVENT_AIRCRAFT_LOADED:
 					global_controls_info.set_pmdg747_loaded(is_pmdg747_loaded(ptr->szString));
 					global_controls_info.onreload();
+					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
+						EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
 					break;
                 default:
 					break;
@@ -1823,21 +1788,8 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 	if (display_update)
 	{
 		int gfmcppro_num = -1;
-		bool invalidate = false;
-		int bank = 0;
-		global_controls_info.get_display_data(gfmcppro_num, invalidate, bank);
-		if (invalidate)
-		{
-			mcp->invalidate();
-		}
-		if (bank > 0)
-		{
-			mcp->show_bank(true);
-		}
-		else if (bank < 0)
-		{
-			mcp->show_bank(false);
-		}
+		int gfefis_num = -1;
+		global_controls_info.get_devs(gfmcppro_num, gfefis_num);
 		if (gfmcppro_num >= 0)
 		{
 			mcp->update_mcppro(gfmcppro_num);
@@ -1848,6 +1800,9 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 }
 
 
+void CALLBACK NullDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt)
+{
+}
 
 
 int main(int argc, char* argv[])
@@ -1857,39 +1812,44 @@ int main(int argc, char* argv[])
 
 	try
 	{
-		HANDLE hSimConnect;
-		mcppro_display_747 mcppro;
+		HANDLE hSimConnect, hSimConnect2;
+		
   
 		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
 		{
-
-			printf("\nConnected to Flight Simulator!\n");
-            global_controls_info.init(::GetModuleHandle(NULL), hSimConnect);
-            map_747_vars(hSimConnect);
-            map_747_events(hSimConnect);
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_PAUSED, "Paused");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "6Hz");
-//			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "Frame");
-
-			SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-
-
-			bool aircraft_reload = false;
-
-			while( 0 == quit )
+			if (SUCCEEDED(SimConnect_Open(&hSimConnect2, "PMDG747GFMcpPro2", NULL, 0, 0, 0)))
 			{
-				SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, &mcppro);
-				if (!process_mcppro())
+
+				printf("\nConnected to Flight Simulator!\n");
+				global_controls_info.init(::GetModuleHandle(NULL), hSimConnect, hSimConnect2);
+				map_747_vars(hSimConnect);
+				map_747_events(hSimConnect);
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_PAUSED, "Paused");
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
+				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "6Hz");
+				SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+				const char event_name[] = { "PMDG747Iface.NewInput" };
+				SimConnect_MapClientEventToSimEvent(hSimConnect, EVENT_HAS_INPUT, event_name);
+				SimConnect_MapClientEventToSimEvent(hSimConnect2, EVENT_HAS_INPUT, event_name);
+				SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1, EVENT_HAS_INPUT, TRUE);
+				
+
+				while (0 == quit)
 				{
-					Sleep(100);
+					SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
+					SimConnect_CallDispatch(hSimConnect2, NullDispatchProcPDR, NULL);
 				}
-            }
-			hr = SimConnect_Close(hSimConnect);
+			}
+			else
+			{
+				printf("Secondary Simconnect connection failed\n");
+				hr = SimConnect_Close(hSimConnect);
+			}
+			
 		}
 		else
 		{
