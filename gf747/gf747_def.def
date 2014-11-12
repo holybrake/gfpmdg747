@@ -1,0 +1,5 @@
+LIBRARY	"gf747"
+EXPORTS
+DLLStart
+DLLStop
+Panels DATA
