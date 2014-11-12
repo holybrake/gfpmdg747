@@ -1,9 +1,10 @@
 
 #include "stdafx.h"
 
-#include <SimConnect.h>
+
 
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <cstdio>
 #include <iomanip>
@@ -14,14 +15,19 @@
 #include <algorithm>
 #include <iterator>
 #include <string>
-
+#ifndef _WINDOWS
 #define _WINDOWS
+#endif
 #include <GFDevApi.h>
-
+#include <SimConnect.h>
+#ifdef _USRDLL
+#include <gauges.h>
+#endif //_USRDLL
 namespace logger
 {
 
-std::ostream& lout = std::cout;
+//std::ostream& lout = std::cout;
+	std::ofstream lout("c:\\temp\\gf747.log");
 }
 
 
@@ -316,13 +322,7 @@ public:
 	~controls_info()
 	{
 		::CloseHandle(has_new);
-		if (is_init)
-		{
-			clear_display();
-			GFDev_Terminate();
-			SimConnect_Close(hSimConnect);
-			SimConnect_Close(hSimConnect2);
-		}
+		deinit();
 	}
 
 	void clear_display()
@@ -347,6 +347,17 @@ public:
 		hSimConnect = hSimCon;
 		hSimConnect2 = hSimCon2;
 		GFDev_Init(hInst);
+	}
+	void deinit()
+	{
+		if (is_init)
+		{
+			clear_display();
+			GFDev_Terminate();
+			SimConnect_Close(hSimConnect);
+			SimConnect_Close(hSimConnect2);
+		}
+		is_init = false;
 	}
 
 	void on_panel_state()
@@ -1330,7 +1341,6 @@ static BOOL InputCallback( GFDEV_HW_TYPE HWType, unsigned short wParam, LPGFINPU
 
 	return bInputProcessed;
 }
-//int _tmain(int argc, _TCHAR* argv[])
 
 
 void GFInitialUpdate(int gfmcppro_num, int gfefis_num)
@@ -1584,6 +1594,47 @@ bool process_mcppro(HANDLE hSimConnect, mcppro_display_747& mcppro, controls_inf
 }
 
 
+namespace
+{
+#ifdef _USRDLL
+	ID bank_var_id = -1;
+	ID yoke_var_id = -1;
+	
+#endif //_USRDLL
+
+	void update_var_id()
+	{
+#ifdef _USRDLL
+		bank_var_id = check_named_variable("MCP_BankLimit_Knob_var");
+		yoke_var_id = check_named_variable("yokehide");
+#endif //_USRDLL
+	}
+
+	void yoke_hide()
+	{
+#ifdef _USRDLL
+		if (yoke_var_id >= 0)
+		{
+			set_named_variable_value(yoke_var_id, FLOAT64(1.0));
+		}
+#endif
+	}
+
+	int get_max_bank_value()
+	{
+		int ret = -1;
+#ifdef _USRDLL
+		if (bank_var_id >= 0)
+		{
+			ret = get_named_variable_value(bank_var_id);
+			ret /= 2;
+		}
+#endif
+		return ret;
+	}
+
+}
+
 void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt)
 {
     HRESULT hr;
@@ -1592,7 +1643,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 	HANDLE hSimConnect = reinterpret_cast<HANDLE>(ctxt);
 	//mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747*>(ctxt);
 	bool display_update = false;
-
+	static int bank_lim = -1;
     switch(pData->dwID)
     {
 		case SIMCONNECT_RECV_ID_OPEN:
@@ -1614,6 +1665,7 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 					break;
 				case EVENT_SIM_UNPAUSED:
 					logger::lout << "Unpaused" << std::endl;
+					update_var_id();
 					global_controls_info.on_unpaused();
                     break;
 				case EVENT_SIM_STOP:
@@ -1627,8 +1679,14 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
 				case EVENT_MENU_ROOT:
 					break;
                 case EVENT_6HZ:
+					bank_lim = get_max_bank_value();
+					if (bank_lim >= 0)
+					{
+						mcp->set_bank_lim(bank_lim);						
+					}
 					if (global_controls_info.need_panel_state_update())
 					{
+						yoke_hide();
 						SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
 							EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
 					}
@@ -1712,7 +1770,10 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                             mcp->set_mach_ias(val);
                             break;
 						case AP_BANK_LIM:
-							mcp->set_bank_lim(val);
+							if (bank_lim < 0)
+							{
+								mcp->set_bank_lim(val);
+							}
 							break;
 						case AP_VS:
 							mcp->set_vs(val);
@@ -1804,57 +1865,70 @@ void CALLBACK NullDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ct
 {
 }
 
+int init_stuff(HMODULE hModule, HANDLE& hSimConnect, HANDLE& hSimConnect2)
+{
+	int result = 0;
+	if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
+	{
+		if (SUCCEEDED(SimConnect_Open(&hSimConnect2, "PMDG747GFMcpPro2", NULL, 0, 0, 0)))
+		{
+			result = 0;
+			global_controls_info.init(hModule, hSimConnect, hSimConnect2);
+			map_747_vars(hSimConnect);
+			map_747_events(hSimConnect);
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_PAUSED, "Paused");
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
+			SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+			const char event_name[] = { "PMDG747Iface.NewInput" };
+			SimConnect_MapClientEventToSimEvent(hSimConnect, EVENT_HAS_INPUT, event_name);
+			SimConnect_MapClientEventToSimEvent(hSimConnect2, EVENT_HAS_INPUT, event_name);
+			SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1, EVENT_HAS_INPUT, TRUE);
+
+		}
+		else
+		{
+			result = 2;
+			SimConnect_Close(hSimConnect);
+		}
+	}
+	else
+	{
+		result = 1;
+	}
+	return result;
+}
+
+void call_dispatch(HANDLE hSimConnect, HANDLE hSimConnect2)
+{
+	SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
+	SimConnect_CallDispatch(hSimConnect2, NullDispatchProcPDR, NULL);
+}
 
 int main(int argc, char* argv[])
 {
 	SetConsoleCtrlHandler(ConsoleHandlerRoutine, TRUE);
 	HRESULT hr = NULL;
-
+	HMODULE hModule = ::GetModuleHandle(NULL);
+	
+	int state = -1;
 	try
 	{
-		HANDLE hSimConnect, hSimConnect2;
-		
-  
-		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
-		{
-			if (SUCCEEDED(SimConnect_Open(&hSimConnect2, "PMDG747GFMcpPro2", NULL, 0, 0, 0)))
+		HANDLE hSimConnect, hSimConnect2;		
+		state = init_stuff(hModule, hSimConnect, hSimConnect2);				switch (state)		{		case 0:			printf("\nConnected to Flight Simulator!\n");			while (0 == quit)
 			{
-
-				printf("\nConnected to Flight Simulator!\n");
-				global_controls_info.init(::GetModuleHandle(NULL), hSimConnect, hSimConnect2);
-				map_747_vars(hSimConnect);
-				map_747_events(hSimConnect);
-				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
-				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
-				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_PAUSED, "Paused");
-				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
-				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-				SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
-				SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-				const char event_name[] = { "PMDG747Iface.NewInput" };
-				SimConnect_MapClientEventToSimEvent(hSimConnect, EVENT_HAS_INPUT, event_name);
-				SimConnect_MapClientEventToSimEvent(hSimConnect2, EVENT_HAS_INPUT, event_name);
-				SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1, EVENT_HAS_INPUT, TRUE);
-				
-				while (0 == quit)
-				{
-					SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
-					SimConnect_CallDispatch(hSimConnect2, NullDispatchProcPDR, NULL);
-				}
+				call_dispatch(hSimConnect, hSimConnect2);
 			}
-			else
-			{
-				printf("Secondary Simconnect connection failed\n");
-				hr = SimConnect_Close(hSimConnect);
-			}
-			
-		}
-		else
-		{
-			printf("Simconnect connection failed\n");
+			break;
+		case 2:
+			printf("Secondary Simconnect connection failed\n");
 			getchar();
-		}
-
+			break;
+		case 1:
+			printf("Simconnect connection failed\n");			getchar();			break;		}	
 	}
 	catch (const std::exception& e)
 	{
@@ -1865,3 +1939,68 @@ int main(int argc, char* argv[])
 
 
 
+
+#ifdef _USRDLL
+
+HMODULE g_hModule = NULL;
+
+BOOL APIENTRY DllMain(HMODULE hModule,
+	DWORD  ul_reason_for_call,
+	LPVOID lpReserved
+	)
+{
+	g_hModule = hModule;
+
+	
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
+		
+		break;
+	case DLL_THREAD_ATTACH:
+		break;
+	case DLL_THREAD_DETACH:
+		break;
+	case DLL_PROCESS_DETACH:
+		break;
+	}
+	return TRUE;
+}
+
+
+
+
+PPANELS Panels = NULL;
+
+GAUGESIMPORT    ImportTable =
+{
+	{ 0x0000000F, (PPANELS)NULL },
+	{ 0x00000000, NULL }
+};
+
+
+int __stdcall DLLStart(void)
+{
+	if (NULL != Panels)
+	{
+		ImportTable.PANELSentry.fnptr = (PPANELS)Panels;
+	}
+	HANDLE hSimConnect, hSimConnect2;
+	if (g_hModule)
+	{
+		if (!init_stuff(g_hModule, hSimConnect, hSimConnect2))		{			call_dispatch(hSimConnect, hSimConnect2);
+		}
+	}
+	return 0;
+}
+
+//
+// The DLLStop function must be present.
+//
+void __stdcall DLLStop(void)
+{
+	global_controls_info.deinit();
+}
+
+
+#endif //_USRDLL
