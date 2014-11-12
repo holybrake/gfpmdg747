@@ -1968,7 +1968,12 @@ int main(int argc, char* argv[])
 	try
 	{
 		HANDLE hSimConnect, hSimConnect2;		
-		state = init_stuff(hModule, hSimConnect, hSimConnect2);				switch (state)		{		case 0:			printf("\nConnected to Flight Simulator!\n");			while (0 == quit)
+		state = init_stuff(hModule, hSimConnect, hSimConnect2);		
+		switch (state)
+		{
+		case 0:
+			printf("\nConnected to Flight Simulator!\n");
+			while (0 == quit)
 			{
 				call_dispatch(hSimConnect, hSimConnect2);
 			}
@@ -1978,7 +1983,10 @@ int main(int argc, char* argv[])
 			getchar();
 			break;
 		case 1:
-			printf("Simconnect connection failed\n");			getchar();			break;		}	
+			printf("Simconnect connection failed\n");
+			getchar();
+			break;
+		}	
 	}
 	catch (const std::exception& e)
 	{
@@ -2039,8 +2047,8 @@ int __stdcall DLLStart(void)
 	if (g_hModule)
 	{
 		if (!init_stuff(g_hModule, hSimConnect, hSimConnect2))
-        {
-            call_dispatch(hSimConnect, hSimConnect2);
+		{
+			call_dispatch(hSimConnect, hSimConnect2);
         }
 	}
 	return 0;
