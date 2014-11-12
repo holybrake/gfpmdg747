@@ -252,6 +252,7 @@ struct controls_cmd
     unsigned int spd_intv:1;
     unsigned int bank_inc:1;
     unsigned int bank_dec:1;
+    unsigned int bank_change_start:1;
     unsigned int bank_change_end:1;
     unsigned int min_sw_inc:1;
     unsigned int min_sw_dec:1;
@@ -265,6 +266,8 @@ struct controls_block
 {
     controls_state state;
     controls_cmd cmd;
+    const long long hold_key_time_ms = 500;
+
 };
 
 class controls_info
@@ -532,7 +535,35 @@ struct efis_input_context: public GFEFISINPUTREPORT
 
     std::chrono::high_resolution_clock::time_point fpv_pressed;
     std::chrono::high_resolution_clock::time_point mtrs_pressed;
+    std::chrono::high_resolution_clock::time_point A_pressed;
+    std::chrono::high_resolution_clock::time_point B_pressed;
 };
+
+struct mcppro_input_context:public GFMCPPROINPUTREPORT
+{
+    mcppro_input_context()
+    {
+        clear();
+    }
+
+    void clear()
+    {
+        nADialVal = 0;
+        nBDialVal = 0;
+        nCDialVal = 0;
+        nDDialVal = 0;
+        nEDialVal = 0;
+        nFDialVal = 0;
+        ulSwitchState = 0;
+    }
+    std::chrono::high_resolution_clock::time_point A_pressed;
+    std::chrono::high_resolution_clock::time_point B_pressed;
+    std::chrono::high_resolution_clock::time_point C_pressed;
+    std::chrono::high_resolution_clock::time_point D_pressed;
+    std::chrono::high_resolution_clock::time_point E_pressed;
+    std::chrono::high_resolution_clock::time_point F_pressed;
+}
+
 
 namespace
 {
@@ -1104,6 +1135,8 @@ enum returns
     Increment,
     Decrement,
     Press,
+    Hold,
+    Released,
     ReleasedAfterRotate
 };
 
@@ -1136,15 +1169,22 @@ returns pressed_knob_input(short & dialcontext, short dialval, unsigned short de
 
 returns process_knob(int & unpressedval, short& dialcontext, short dialval, 
         unsigned long prev_state, unsigned long new_state, unsigned long mask, 
+        std::chrono::high_resolution_clock::time_point& press_tp,
         unsigned short delta, unsigned short delta2)
 {
     bool last_press = (prev_state & mask) ? true : false;
     bool new_press = (new_state & mask) ? true : false;
     returns ret = NoAction;
 
-    if (new_press && last_press) //pressed and holding
+    if (new_press && last_press) //already pressed and holding
     {
-        ret = pressed_knob_input(dialcontext, dialval, delta);
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::high_resolution_clock::now()
+                    - press_tp).count() > hold_key_time_ms)
+        {
+            ret = Hold;
+        }
+        ret = pressed_knob_input(dialcontext, dialval, delta); 
     }
     else if ( !last_press && !new_press) // not pressed
     {
@@ -1154,13 +1194,18 @@ returns process_knob(int & unpressedval, short& dialcontext, short dialval,
     {
         if (std::abs(dialcontext + dialval) < delta2)
         {
-            ret = Press;
+            ret = Released;
         }
         else
         {
             ret = ReleasedAfterRotate;
         }
         dialcontext = 0;
+    }
+    else if (!last_press && new_press) //pressed
+    {
+        press_tp = std::chrono::high_resolution_clock::now();
+        ret = Press;
     }
     return ret;
 }
@@ -1194,21 +1239,21 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
 
     const unsigned short delta = 3;
     switch( press_knob::process_knob(ctr.cmd.mins_knob, ctx.nADialVal, r->nADialVal,
-            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_15, delta, 1))
+            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_15, ctx.A_pressed, delta, 1))
     {
         case press_knob::Increment: ctr.cmd.min_sw_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.min_sw_dec = 1; break;
-        case press_knob::Press: ctr.cmd.mins_rst = 1; break;
+        case press_knob::Released: ctr.cmd.mins_rst = 1; break;
         default:
             ;
     }
 
     switch( press_knob::process_knob(ctr.cmd.baro_knob, ctx.nBDialVal, r->nBDialVal,
-            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_16, delta, 1))
+            ctx.wSwitchState, r->wSwitchState, GFEFIS_SW_16, ctx.B_pressed, delta, 1))
     {
         case press_knob::Increment: ctr.cmd.baro_sw_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.baro_sw_dec = 1; break;
-        case press_knob::Press: ctr.cmd.baro_std = 1; break;
+        case press_knob::Released: ctr.cmd.baro_std = 1; break;
         default:
             ;
     }
@@ -1223,7 +1268,6 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
         ctx.fpv_pressed = std::chrono::high_resolution_clock::now();
     }
 
-    const long long hold_key_time_ms = 500;
 
     if (released & GFEFIS_SW_13) //MTRS
     {
@@ -1257,7 +1301,7 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
 
 void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 {
-    static GFMCPPROINPUTREPORT ctx = {0};
+    static mcppro_input_context ctx;
 
 	ctr.state.ap_disengage = ((r->ulSwitchState) & GFMCPPRO_SW_23)?1:0;
 	ctr.state.at_arm = ((r->ulSwitchState) & GFMCPPRO_SW_5)?1:0;
@@ -1288,12 +1332,13 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 	ctr.cmd.vs = (pressed & GFMCPPRO_SW_22)?1:0;
 
     switch( press_knob::process_knob(ctr.cmd.hdg_knob, ctx.nCDialVal, r->nCDialVal,
-            ctx.ulSwitchState, r->ulSwitchState, GFMCPPRO_SW_13, 2, 1))
+            ctx.ulSwitchState, r->ulSwitchState, GFMCPPRO_SW_13, ctx.C_pressed, 2, 1))
     {
         case press_knob::Increment: ctr.cmd.bank_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.bank_dec = 1; break;
-        case press_knob::Press: ctr.cmd.hdgsel = 1; break;
+        case press_knob::Released: ctr.cmd.hdgsel = 1; break;
 		case press_knob::ReleasedAfterRotate: ctr.cmd.bank_change_end = 1; break;
+   		case press_knob::Hold: ctr.cmd.bank_change_start = 1; break;
         default:
             ;
     }
@@ -1488,6 +1533,11 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
 			mcppro.show_bank(true);
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPDecreaseBankLimiter, 0 ,gid , flag );
         }
+        if (controls.cmd.bank_change_start )
+        {
+			mcppro.show_bank(true);
+        }
+
         if (controls.cmd.bank_change_end )
         {
 			mcppro.show_bank(false);
@@ -1988,8 +2038,10 @@ int __stdcall DLLStart(void)
 	HANDLE hSimConnect, hSimConnect2;
 	if (g_hModule)
 	{
-		if (!init_stuff(g_hModule, hSimConnect, hSimConnect2))		{			call_dispatch(hSimConnect, hSimConnect2);
-		}
+		if (!init_stuff(g_hModule, hSimConnect, hSimConnect2))
+        {
+            call_dispatch(hSimConnect, hSimConnect2);
+        }
 	}
 	return 0;
 }
