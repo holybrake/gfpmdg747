@@ -1,3 +1,40 @@
+//
+// Copyright (c) 2015, Alexander Voronkov
+// All rights reserved.
+//
+// This software created as result of SimConnect(r) logfile analysis,
+// the author didn't reverse engineer, decompile, disassemble files of any PMDG(r) software.
+// The author provides this software as an example but not as any kind of end-user product,
+// if you wish to use this software by any way,
+// you shall solely assume all legal responsibilities in full.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+// OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+// OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+// HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Redistribution and use in source and binary forms, with or without modification,
+// are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the above disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+// this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its contributors
+// may be used to endorse or promote products derived from this software without specific prior written permission.
+//
+
+// To build this software you will need Microsoft FSX Acceleration SDK and GoFlight SDK v2.21 
+// The Compiler should implement C++11 standart (Build tested with MSVS2015 Express and MSVS2013 Express )
+
 
 #include "stdafx.h"
 
@@ -25,9 +62,18 @@
 #endif //_USRDLL
 namespace logger
 {
+#ifdef _USRDLL
+    class null_stream {};
+    template <typename T>
+    null_stream & operator<<(null_stream & s, T const &) {return s;}
+	//manip
+	null_stream & operator<<(null_stream & s, std::ostream &(std::ostream&)) { return s; }
+    //std::ofstream lout("c:\\temp\\gf747.log");
+    null_stream lout;
+#else
+    std::ostream& lout = std::cout;
+#endif
 
-//std::ostream& lout = std::cout;
-	std::ofstream lout("c:\\temp\\gf747.log");
 }
 
 
@@ -46,8 +92,8 @@ enum client_data_id
 enum DATA_REQUEST_ID {
     REQUEST_FIRST = -2,
     REQUEST_APDATA = 1,
-	REQUEST_DATA,
-	REQUEST_VISIBLE,
+    REQUEST_DATA,
+    REQUEST_VISIBLE,
     REQUEST_LED
 };
 
@@ -60,117 +106,117 @@ enum event_groups
 
 enum sim_events
 {
-	EVENT_SIM_START,
-	EVENT_SIM_STOP,
-	EVENT_SIM_PAUSED,
-	EVENT_SIM_UNPAUSED,
-	EVENT_AIRCRAFT_LOADED,
-	EVENT_FLIGHT_LOADED,
-	EVENT_6HZ,
-	EVENT_HAS_INPUT,
-	EVENT_MENU_ROOT,
-	EVENT_MENU_RESTART,
+    EVENT_SIM_START,
+    EVENT_SIM_STOP,
+    EVENT_SIM_PAUSED,
+    EVENT_SIM_UNPAUSED,
+    EVENT_AIRCRAFT_LOADED,
+    EVENT_FLIGHT_LOADED,
+    EVENT_6HZ,
+    EVENT_HAS_INPUT,
+    EVENT_MENU_ROOT,
+    EVENT_MENU_RESTART,
 
 
-	IFACE_EVENTS_START = 100,
-	EFISCaptainPressMINS,
-	EFISCaptainIncreaseMINS,
-	EFISCaptainDecreaseMINS,
-	EFISCaptainResetMINS,
-	EFISCaptainPressBARO,
-	EFISCaptainIncreaseBARO,
-	EFISCaptainDecreaseBARO,
-	EFISCaptainPressBAROSTD,
-	EFISCaptainPressFPV,
-	EFISCaptainPressMTRS,
-	EFISCaptainIncreaseNAVL,
-	EFISCaptainDecreaseNAVL,
-	EFISCaptainIncreaseNAVR,
-	EFISCaptainDecreaseNAVR,
-	EFISCaptainIncreaseNDMODE,
-	EFISCaptainDecreaseNDMODE,
-	EFISCaptainPressNDMODECTR,
-	EFISCaptainIncreaseNDRANGE,
-	EFISCaptainDecreaseNDRANGE,
-	EFISCaptainPressNDRANGETFC,
-	EFISCaptainPressWXR,
-	EFISCaptainPressSTA,
-	EFISCaptainPressWPT,
-	EFISCaptainPressARPT,
-	EFISCaptainPressDATA,
-	EFISCaptainPressPOS,
-	EFISCaptainPressTERR,
-	EFISCaptainSetMINS,
-	EFISCaptainSetBARO,
-	EFISCaptainSetNAVL,
-	EFISCaptainSetNAVR,
-	EFISCaptainSetNDMODE,
-	EFISCaptainSetNDRANGE,
-	MCPPressATArm,
-	MCPPressN1,
-	MCPPressTHR,
-	MCPPressSPD,
-	MCPPressCO,
-	MCPPressFLCH,
-	MCPPressVNAV,
-	MCPPressLNAV,
-	MCPPressVORLOC,
-	MCPPressAPP,
-	MCPPressHDGSEL,
-	MCPPressHDGHOLD,
-	MCPPressALTHOLD,
-	MCPPressVS,
-	MCPPressCMDL,
-	MCPPressCMDC,
-	MCPPressCMDR,
-	MCPPressFDL,
-	MCPPressFDR,
-	MCPPressAPDiseng,
-	MCPIncreaseBankLimiter,
-	MCPDecreaseBankLimiter,
-	MCPIncreaseAlt,
-	MCPDecreaseAlt,
-	MCPIncreaseSpd,
-	MCPDecreaseSpd,
-	MCPIncreaseHdg,
-	MCPDecreaseHdg,
-	MCPIncreaseVS,
-	MCPDecreaseVS,
-	MCPSetTOGA,
-	MCPResetTOGA,
-	MCPPressSpdIntv,
-	MCPPressAltIntv,
-	MCPPressCMD,
-	MCPPressCWS,
-	MCPPressFD,
-	MCPPressTOGA,
-	MCPPressBankLimiter,
-	MCPSetAltitude,
-	MCPSetSpeed,
-	MCPSetHeading,
-	MCPSetVS,
-	MCPSetFDL,
-	MCPSetFDR
+    IFACE_EVENTS_START = 100,
+    EFISCaptainPressMINS,
+    EFISCaptainIncreaseMINS,
+    EFISCaptainDecreaseMINS,
+    EFISCaptainResetMINS,
+    EFISCaptainPressBARO,
+    EFISCaptainIncreaseBARO,
+    EFISCaptainDecreaseBARO,
+    EFISCaptainPressBAROSTD,
+    EFISCaptainPressFPV,
+    EFISCaptainPressMTRS,
+    EFISCaptainIncreaseNAVL,
+    EFISCaptainDecreaseNAVL,
+    EFISCaptainIncreaseNAVR,
+    EFISCaptainDecreaseNAVR,
+    EFISCaptainIncreaseNDMODE,
+    EFISCaptainDecreaseNDMODE,
+    EFISCaptainPressNDMODECTR,
+    EFISCaptainIncreaseNDRANGE,
+    EFISCaptainDecreaseNDRANGE,
+    EFISCaptainPressNDRANGETFC,
+    EFISCaptainPressWXR,
+    EFISCaptainPressSTA,
+    EFISCaptainPressWPT,
+    EFISCaptainPressARPT,
+    EFISCaptainPressDATA,
+    EFISCaptainPressPOS,
+    EFISCaptainPressTERR,
+    EFISCaptainSetMINS,
+    EFISCaptainSetBARO,
+    EFISCaptainSetNAVL,
+    EFISCaptainSetNAVR,
+    EFISCaptainSetNDMODE,
+    EFISCaptainSetNDRANGE,
+    MCPPressATArm,
+    MCPPressN1,
+    MCPPressTHR,
+    MCPPressSPD,
+    MCPPressCO,
+    MCPPressFLCH,
+    MCPPressVNAV,
+    MCPPressLNAV,
+    MCPPressVORLOC,
+    MCPPressAPP,
+    MCPPressHDGSEL,
+    MCPPressHDGHOLD,
+    MCPPressALTHOLD,
+    MCPPressVS,
+    MCPPressCMDL,
+    MCPPressCMDC,
+    MCPPressCMDR,
+    MCPPressFDL,
+    MCPPressFDR,
+    MCPPressAPDiseng,
+    MCPIncreaseBankLimiter,
+    MCPDecreaseBankLimiter,
+    MCPIncreaseAlt,
+    MCPDecreaseAlt,
+    MCPIncreaseSpd,
+    MCPDecreaseSpd,
+    MCPIncreaseHdg,
+    MCPDecreaseHdg,
+    MCPIncreaseVS,
+    MCPDecreaseVS,
+    MCPSetTOGA,
+    MCPResetTOGA,
+    MCPPressSpdIntv,
+    MCPPressAltIntv,
+    MCPPressCMD,
+    MCPPressCWS,
+    MCPPressFD,
+    MCPPressTOGA,
+    MCPPressBankLimiter,
+    MCPSetAltitude,
+    MCPSetSpeed,
+    MCPSetHeading,
+    MCPSetVS,
+    MCPSetFDL,
+    MCPSetFDR
 };
 
 enum sim_data
 {
-	EFISBaro,
-	EFISMins,
-	EFISNavL,
-	EFISNavR,
-	EFISNDMode,
-	EFISNDCenter,
-	EFISNDRange,
-	MCPHdg,
-	MCPIas,
-	MCPMach,
-	MCPAlt,
-	MCPVS,
-	MCPPanelState,
-	MACH_IAS,
-	AP_BANK_LIM,
-	AP_VS
+    EFISBaro,
+    EFISMins,
+    EFISNavL,
+    EFISNavR,
+    EFISNDMode,
+    EFISNDCenter,
+    EFISNDRange,
+    MCPHdg,
+    MCPIas,
+    MCPMach,
+    MCPAlt,
+    MCPVS,
+    MCPPanelState,
+    MACH_IAS,
+    AP_BANK_LIM,
+    AP_VS
 };
 
 
@@ -258,7 +304,7 @@ struct controls_cmd
     unsigned int min_sw_dec:1;
     unsigned int baro_sw_inc:1;
     unsigned int baro_sw_dec:1;
-     
+
 //--34
 };
 
@@ -266,233 +312,233 @@ struct controls_block
 {
     controls_state state;
     controls_cmd cmd;
-    const long long hold_key_time_ms = 500;
+    static const long long hold_key_time_ms = 500;
 
 };
 
 class controls_info
 {
 public:
-	enum loaded_states
-	{
-		PMDG747_UNLOADED = -1,
-		PMDG747_NOTLOADED = 0,
-		PMDG747_LOADED,
-		PMDG747_JUSTLOADED
-	};
+    enum loaded_states
+    {
+        PMDG747_UNLOADED = -1,
+        PMDG747_NOTLOADED = 0,
+        PMDG747_LOADED,
+        PMDG747_JUSTLOADED
+    };
 private:
-	std::mutex mtx;
-	std::mutex hardware_mtx;
-	int current_write;
-	int current_read;
-	static const int controls_size = 3;
-	controls_block controls[controls_size];
+    std::mutex mtx;
+    std::mutex hardware_mtx;
+    int current_write;
+    int current_read;
+    static const int controls_size = 3;
+    controls_block controls[controls_size];
 
-	static int get_next(int current)
-	{
-		return (current + 1) % controls_size;
-	}
+    static int get_next(int current)
+    {
+        return (current + 1) % controls_size;
+    }
 
-	bool hardware_changed;
-	int gfmcppro_num;
-	int gfefis_num;
-	HINSTANCE hInstance;
-	HANDLE hSimConnect;
-	HANDLE hSimConnect2;
-	HANDLE has_new;
-	bool is_init;
-	bool panel_state_initialized;
-	loaded_states pmdg_747_loaded;
-	bool panel_state_update;
-	bool unpaused_time_ready;
-	std::chrono::high_resolution_clock::time_point unpaused_time;
+    bool hardware_changed;
+    int gfmcppro_num;
+    int gfefis_num;
+    HINSTANCE hInstance;
+    HANDLE hSimConnect;
+    HANDLE hSimConnect2;
+    HANDLE has_new;
+    bool is_init;
+    bool panel_state_initialized;
+    loaded_states pmdg_747_loaded;
+    bool panel_state_update;
+    bool unpaused_time_ready;
+    std::chrono::high_resolution_clock::time_point unpaused_time;
 
 public:
 
-	controls_info()
-		: current_write(0), current_read(2)
-		, hardware_changed(true), gfmcppro_num(-1)
-		, gfefis_num(-1), is_init(false)
-		, hSimConnect(INVALID_HANDLE_VALUE)
-		, hSimConnect2(INVALID_HANDLE_VALUE)
-		, panel_state_initialized(false)
-		, pmdg_747_loaded(PMDG747_NOTLOADED)
-		, panel_state_update(false)
-		, unpaused_time_ready(false)
-	{
-		has_new = ::CreateEvent(NULL, TRUE, FALSE, NULL);
-	}
-	~controls_info()
-	{
-		::CloseHandle(has_new);
-		deinit();
-	}
+    controls_info()
+        : current_write(0), current_read(2)
+        , hardware_changed(true), gfmcppro_num(-1)
+        , gfefis_num(-1), is_init(false)
+        , hSimConnect(INVALID_HANDLE_VALUE)
+        , hSimConnect2(INVALID_HANDLE_VALUE)
+        , panel_state_initialized(false)
+        , pmdg_747_loaded(PMDG747_NOTLOADED)
+        , panel_state_update(false)
+        , unpaused_time_ready(false)
+    {
+        has_new = ::CreateEvent(NULL, TRUE, FALSE, NULL);
+    }
+    ~controls_info()
+    {
+        ::CloseHandle(has_new);
+        deinit();
+    }
 
-	void clear_display()
-	{
-		std::unique_lock<std::mutex> lck(mtx);
-		if (gfmcppro_num >= 0)
-		{
-			GFMCPPro_SetADisplayText(gfmcppro_num, "   ");
-			GFMCPPro_SetBDisplayText(gfmcppro_num, "     ");
-			GFMCPPro_SetCDisplayText(gfmcppro_num, "     ");
-			GFMCPPro_SetDDisplayText(gfmcppro_num, "     ");
-			GFMCPPro_SetEDisplayText(gfmcppro_num, "     ");
-			GFMCPPro_SetFDisplayText(gfmcppro_num, "   ");
-			GFMCPPro_SetIndicators(gfmcppro_num, 0);
-		}
-	}
+    void clear_display()
+    {
+        std::unique_lock<std::mutex> lck(mtx);
+        if (gfmcppro_num >= 0)
+        {
+            GFMCPPro_SetADisplayText(gfmcppro_num, "   ");
+            GFMCPPro_SetBDisplayText(gfmcppro_num, "     ");
+            GFMCPPro_SetCDisplayText(gfmcppro_num, "     ");
+            GFMCPPro_SetDDisplayText(gfmcppro_num, "     ");
+            GFMCPPro_SetEDisplayText(gfmcppro_num, "     ");
+            GFMCPPro_SetFDisplayText(gfmcppro_num, "   ");
+            GFMCPPro_SetIndicators(gfmcppro_num, 0);
+        }
+    }
 
-	void init(HINSTANCE hInst, HANDLE hSimCon, HANDLE hSimCon2)
-	{
-		is_init = true;
-		hInstance = hInst;
-		hSimConnect = hSimCon;
-		hSimConnect2 = hSimCon2;
-		GFDev_Init(hInst);
-	}
-	void deinit()
-	{
-		if (is_init)
-		{
-			clear_display();
-			GFDev_Terminate();
-			SimConnect_Close(hSimConnect);
-			SimConnect_Close(hSimConnect2);
-		}
-		is_init = false;
-	}
+    void init(HINSTANCE hInst, HANDLE hSimCon, HANDLE hSimCon2)
+    {
+        is_init = true;
+        hInstance = hInst;
+        hSimConnect = hSimCon;
+        hSimConnect2 = hSimCon2;
+        GFDev_Init(hInst);
+    }
+    void deinit()
+    {
+        if (is_init)
+        {
+            clear_display();
+            GFDev_Terminate();
+            SimConnect_Close(hSimConnect);
+            SimConnect_Close(hSimConnect2);
+        }
+        is_init = false;
+    }
 
-	void on_panel_state()
-	{
-		panel_state_initialized = true;
-	}
+    void on_panel_state()
+    {
+        panel_state_initialized = true;
+    }
 
-	bool need_panel_state_update(bool clear = false)
-	{
-		if (!panel_state_update) return false;
-		if (unpaused_time_ready && std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now()
-			- unpaused_time).count() > 10000)
-		{
-			if (clear)
-			{
-				unpaused_time_ready = false;
-				panel_state_update = false;
-			}
-			return true;
-		}
-		return false;
-	}
+    bool need_panel_state_update(bool clear = false)
+    {
+        if (!panel_state_update) return false;
+        if (unpaused_time_ready && std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now()
+            - unpaused_time).count() > 10000)
+        {
+            if (clear)
+            {
+                unpaused_time_ready = false;
+                panel_state_update = false;
+            }
+            return true;
+        }
+        return false;
+    }
 
-	void on_unpaused()
-	{
-		if (panel_state_update)
-		{
-			unpaused_time_ready = true;
-			unpaused_time = std::chrono::high_resolution_clock::now();
-		}
-	}
-	
-	loaded_states get_pmdg747_loaded()
-	{
-		loaded_states ret = pmdg_747_loaded;
-		if (pmdg_747_loaded == PMDG747_JUSTLOADED)
-		{
-			pmdg_747_loaded = PMDG747_LOADED;
-		}
-		else if (pmdg_747_loaded == PMDG747_UNLOADED)
-		{
-			pmdg_747_loaded = PMDG747_NOTLOADED;
-		}
-		return ret;
-	}
+    void on_unpaused()
+    {
+        if (panel_state_update)
+        {
+            unpaused_time_ready = true;
+            unpaused_time = std::chrono::high_resolution_clock::now();
+        }
+    }
 
-	void set_pmdg747_loaded(bool state)
-	{
-		if (state)
-		{
-			if (pmdg_747_loaded == PMDG747_NOTLOADED)
-			{
-				pmdg_747_loaded = PMDG747_JUSTLOADED;
-			}
-			else if (pmdg_747_loaded == PMDG747_UNLOADED)
-			{
-				pmdg_747_loaded = PMDG747_LOADED;
-			}
-		}
-		else
-		{
-			if (pmdg_747_loaded == PMDG747_JUSTLOADED)
-			{
-				pmdg_747_loaded = PMDG747_NOTLOADED;
-			}
-			else if (pmdg_747_loaded == PMDG747_LOADED)
-			{
-				pmdg_747_loaded = PMDG747_UNLOADED;
-			}
-		}
-	}
+    loaded_states get_pmdg747_loaded()
+    {
+        loaded_states ret = pmdg_747_loaded;
+        if (pmdg_747_loaded == PMDG747_JUSTLOADED)
+        {
+            pmdg_747_loaded = PMDG747_LOADED;
+        }
+        else if (pmdg_747_loaded == PMDG747_UNLOADED)
+        {
+            pmdg_747_loaded = PMDG747_NOTLOADED;
+        }
+        return ret;
+    }
+
+    void set_pmdg747_loaded(bool state)
+    {
+        if (state)
+        {
+            if (pmdg_747_loaded == PMDG747_NOTLOADED)
+            {
+                pmdg_747_loaded = PMDG747_JUSTLOADED;
+            }
+            else if (pmdg_747_loaded == PMDG747_UNLOADED)
+            {
+                pmdg_747_loaded = PMDG747_LOADED;
+            }
+        }
+        else
+        {
+            if (pmdg_747_loaded == PMDG747_JUSTLOADED)
+            {
+                pmdg_747_loaded = PMDG747_NOTLOADED;
+            }
+            else if (pmdg_747_loaded == PMDG747_LOADED)
+            {
+                pmdg_747_loaded = PMDG747_UNLOADED;
+            }
+        }
+    }
 
 
 
-	void onreload()
-	{
-		if (pmdg_747_loaded == PMDG747_JUSTLOADED || pmdg_747_loaded == PMDG747_LOADED)
-		{
-			panel_state_update = true;
-		}
-		else
-		{
-			panel_state_update = false;
-		}
-		panel_state_initialized = false;
-		unpaused_time_ready = false;
-	}
+    void onreload()
+    {
+        if (pmdg_747_loaded == PMDG747_JUSTLOADED || pmdg_747_loaded == PMDG747_LOADED)
+        {
+            panel_state_update = true;
+        }
+        else
+        {
+            panel_state_update = false;
+        }
+        panel_state_initialized = false;
+        unpaused_time_ready = false;
+    }
 
-	void on_hardware_changed()
-	{
-		hardware_changed = true;
-		GFDev_Terminate();
-		GFDev_Init(hInstance);
-	}
-	bool get_devs_and_changed(int& mcpnum, int& efisnum)
-	{
-		std::unique_lock<std::mutex> lck(mtx);
-		bool ret = hardware_changed;
-		if (hardware_changed)
-		{
-			gfmcppro_num = GFMCPPro_GetNumDevices() - 1;
-			gfefis_num = GFEFIS_GetNumDevices() - 1;
-			hardware_changed = false;
-			logger::lout << "devs:" << gfmcppro_num << " " << gfefis_num << std::endl;
-		}
-		mcpnum = gfmcppro_num;
-		efisnum = gfefis_num;
-		return ret;
-	}
-	void get_devs(int& mcpnum, int& efisnum)
-	{
-		std::unique_lock<std::mutex> lck(mtx);
-		mcpnum = gfmcppro_num;
-		efisnum = gfefis_num;
-	}
+    void on_hardware_changed()
+    {
+        hardware_changed = true;
+        GFDev_Terminate();
+        GFDev_Init(hInstance);
+    }
+    bool get_devs_and_changed(int& mcpnum, int& efisnum)
+    {
+        std::unique_lock<std::mutex> lck(mtx);
+        bool ret = hardware_changed;
+        if (hardware_changed)
+        {
+            gfmcppro_num = GFMCPPro_GetNumDevices() - 1;
+            gfefis_num = GFEFIS_GetNumDevices() - 1;
+            hardware_changed = false;
+            logger::lout << "devs:" << gfmcppro_num << " " << gfefis_num << std::endl;
+        }
+        mcpnum = gfmcppro_num;
+        efisnum = gfefis_num;
+        return ret;
+    }
+    void get_devs(int& mcpnum, int& efisnum)
+    {
+        std::unique_lock<std::mutex> lck(mtx);
+        mcpnum = gfmcppro_num;
+        efisnum = gfefis_num;
+    }
 
     bool get_new_input(unsigned int timeout_ms = 0)
     {
 
-		if (!panel_state_initialized)
-		{
-			return false;
-		}
-		bool update = need_panel_state_update(true);
-			
-		if (::WaitForSingleObject(has_new, timeout_ms) == WAIT_TIMEOUT)
-		{
-			return update;
-		}       
+        if (!panel_state_initialized)
+        {
+            return false;
+        }
+        bool update = need_panel_state_update(true);
+
+        if (::WaitForSingleObject(has_new, timeout_ms) == WAIT_TIMEOUT)
+        {
+            return update;
+        }
         current_read = get_next(current_read);
-		::ResetEvent(has_new);
+        ::ResetEvent(has_new);
         return true;
     }
     controls_block& get_current_for_write()
@@ -511,10 +557,10 @@ public:
             controls[next].state = controls[current_write].state;
             controls[next].cmd.clear();
             current_write = next;
-            ::SetEvent(has_new);			
+            ::SetEvent(has_new);
         }
-		SimConnect_TransmitClientEvent(hSimConnect2, SIMCONNECT_OBJECT_ID_USER, 
-			EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+        SimConnect_TransmitClientEvent(hSimConnect2, SIMCONNECT_OBJECT_ID_USER,
+            EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
     }
 
 };
@@ -562,7 +608,7 @@ struct mcppro_input_context:public GFMCPPROINPUTREPORT
     std::chrono::high_resolution_clock::time_point D_pressed;
     std::chrono::high_resolution_clock::time_point E_pressed;
     std::chrono::high_resolution_clock::time_point F_pressed;
-}
+};
 
 
 namespace
@@ -578,23 +624,23 @@ class mcppro_display_747
     int last_vs;
     int last_panel_state;
     int last_mach_ias;
-	int last_ap_vs;
-	int last_bank_lim;
+    int last_ap_vs;
+    int last_bank_lim;
     double last_mach;
     bool hdg_changed;
     bool alt_changed;
     bool vs_changed;
     bool mach_ias_changed;
-	bool ias_changed;
-	bool mach_changed;
+    bool ias_changed;
+    bool mach_changed;
     bool panel_state_changed;
     unsigned long ulIndicatorState;
     bool spd_display_on;
     bool vs_display_on;
-	bool show_bank_lim;
-	
+    bool show_bank_lim;
 
-	
+
+
 
     static unsigned set_indicator_by_panel_state(unsigned panel_state)
     {
@@ -613,7 +659,7 @@ class mcppro_display_747
 //          0x00000800 lnav
 //          0x00001000 loc
 //          0x00002000 app
-//          0x00004000 
+//          0x00004000
 //          0x00008000 althld    //15
 //          0x00010000 vs    //16
 //          0x00020000
@@ -635,13 +681,13 @@ class mcppro_display_747
          return   ((panel_state & 0x00000003u) << 2) // apL apR
                 | ((panel_state & 0x00000C00u) >> 10)   // vnav lnav
                 | ((panel_state & 0x00000004u) << 7) // apC
-				| ((panel_state & 0x00000040u) >> 2 ) // at
+                | ((panel_state & 0x00000040u) >> 2 ) // at
                 | ((panel_state & 0x00000010u) << 10 ) // fdL
                 | ((panel_state & 0x00000020u) << 18 ) // fdR
                 | ((panel_state & 0x00000380u) << 8 ) // thr spd flch
                 | ((panel_state & 0x00001000u) >> 5) // loc
                 | ((panel_state & 0x00002000u) << 6) // app
-				| ((panel_state & 0x00018000u) << 5) //  althld vs
+                | ((panel_state & 0x00018000u) << 5) //  althld vs
                 | ((panel_state & 0x00080000u) >> 1) // hdg
                 ;
 
@@ -657,20 +703,20 @@ public:
           ,last_panel_state(0)
           ,last_mach_ias(0)
           ,last_mach(0.0)
-		  ,last_ap_vs(0)
+          ,last_ap_vs(0)
           ,last_bank_lim(0)
           ,hdg_changed(false)
           ,alt_changed(false)
           ,vs_changed(false)
           ,mach_ias_changed(false)
-		  ,ias_changed(false)
-		  ,mach_changed(false)
+          ,ias_changed(false)
+          ,mach_changed(false)
           ,panel_state_changed(false)
-		  ,ulIndicatorState(0ul)
-		  ,spd_display_on(false)
-		  ,vs_display_on(false)
-		  ,show_bank_lim(false)
-		  
+          ,ulIndicatorState(0ul)
+          ,spd_display_on(false)
+          ,vs_display_on(false)
+          ,show_bank_lim(false)
+
     {
     }
 
@@ -740,13 +786,13 @@ public:
 
     void set_ap_vs(int arg)
     {
-		last_ap_vs = arg;
+        last_ap_vs = arg;
     }
 
 
     void set_panel_state(int arg)
     {
-	    if (arg != last_panel_state)
+        if (arg != last_panel_state)
         {
             bool disp_on = (arg & 0x02000000u)? true: false; // ias/mach disp
             if (disp_on != spd_display_on)
@@ -801,51 +847,51 @@ public:
     void update_mcppro(int devnum)
     {
         char szNumericMsg[8] = {0};
-		if (mach_ias_changed || mach_changed || ias_changed)
+        if (mach_ias_changed || mach_changed || ias_changed)
         {
-			if (mach_ias_changed
-				|| (last_mach_ias && mach_changed)
-				|| (!last_mach_ias && ias_changed)
-				)
-			{
-				if (!spd_display_on )
-				{
-					sprintf( szNumericMsg, "     ");
-				}
-				else if (last_mach_ias )
-				{
-					sprintf( szNumericMsg, " %05.3f", last_mach);
-				}
-				else
-				{
-					sprintf( szNumericMsg, " %3d", last_ias);
-				}
-				GFMCPPro_SetBDisplayText(devnum, szNumericMsg);
-			}
-			mach_ias_changed = false;
-			ias_changed = false;
-			mach_changed = false;
+            if (mach_ias_changed
+                || (last_mach_ias && mach_changed)
+                || (!last_mach_ias && ias_changed)
+                )
+            {
+                if (!spd_display_on )
+                {
+                    sprintf( szNumericMsg, "     ");
+                }
+                else if (last_mach_ias )
+                {
+                    sprintf( szNumericMsg, " %05.3f", last_mach);
+                }
+                else
+                {
+                    sprintf( szNumericMsg, " %3d", last_ias);
+                }
+                GFMCPPro_SetBDisplayText(devnum, szNumericMsg);
+            }
+            mach_ias_changed = false;
+            ias_changed = false;
+            mach_changed = false;
         }
 
         if (hdg_changed)
         {
             if (show_bank_lim )
             {
-				if (last_bank_lim)
-				{
-					sprintf( szNumericMsg, "b%02d", last_bank_lim);
-				}
-				else
-				{
+                if (last_bank_lim)
+                {
+                    sprintf( szNumericMsg, "b%02d", last_bank_lim);
+                }
+                else
+                {
                     sprintf( szNumericMsg, " a ");
-				}
+                }
             }
             else
             {
                 sprintf( szNumericMsg, "%03d", (last_hdg == 360)?0:last_hdg);
             }
-         	GFMCPPro_SetCDisplayText(devnum, szNumericMsg);
-			
+             GFMCPPro_SetCDisplayText(devnum, szNumericMsg);
+
             hdg_changed = false;
         }
         if (vs_changed)
@@ -969,8 +1015,8 @@ void map_747_events(HANDLE hSimConnect)
     SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetVS,               "PMDG.747-400.MCP.Set V/S");
     SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetFDL,              "PMDG.747-400.MCP.Set F/D L");
     SimConnect_MapClientEventToSimEvent(hSimConnect, MCPSetFDR,              "PMDG.747-400.MCP.Set F/D R");
-	/*
-	SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainPressMINS);
+    /*
+    SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainPressMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainIncreaseMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainDecreaseMINS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,EFISCaptainResetMINS);
@@ -1048,7 +1094,7 @@ void map_747_events(HANDLE hSimConnect)
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,MCPSetVS);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,MCPSetFDL);
     SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1,MCPSetFDR);
-	*/
+    */
 }
 
 void map_747_vars(HANDLE hSimConnect)
@@ -1067,14 +1113,14 @@ void map_747_vars(HANDLE hSimConnect)
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 152, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPVS); //seems MCP in reality uses another var from AP data
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_INSTRUMENT_DATA, 160, SIMCONNECT_CLIENTDATATYPE_INT32,0,MCPPanelState);
     SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 16, SIMCONNECT_CLIENTDATATYPE_INT32,0, MACH_IAS);
-	SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 108, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_BANK_LIM);
-	SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 140, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_VS);
+    SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 108, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_BANK_LIM);
+    SimConnect_AddToClientDataDefinition(hSimConnect, DEFINITION_AP_DATA, 140, SIMCONNECT_CLIENTDATATYPE_INT32,0, AP_VS);
     SimConnect_MapClientDataNameToID(hSimConnect,"SDD_AIRCRAFTAUTOPILOTDATA", CDID_AIRCRAFTAUTOPILOTDATA);
     SimConnect_MapClientDataNameToID(hSimConnect,"SDD_AIRCRAFTINSTRUMENTSDATA", CDID_AIRCRAFTINSTRUMENTSDATA);
-	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_FIRST, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
-	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_FIRST, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
-	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_APDATA, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED, 0, 0, 0);
-	SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_DATA, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED , 0, 0, 0);
+    SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_FIRST, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
+    SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_FIRST, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED, 0, 0, 0);
+    SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTAUTOPILOTDATA, REQUEST_APDATA, DEFINITION_AP_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED, 0, 0, 0);
+    SimConnect_RequestClientData(hSimConnect,  CDID_AIRCRAFTINSTRUMENTSDATA, REQUEST_DATA, DEFINITION_INSTRUMENT_DATA, SIMCONNECT_CLIENT_DATA_PERIOD_ON_SET, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_TAGGED|SIMCONNECT_CLIENT_DATA_REQUEST_FLAG_CHANGED , 0, 0, 0);
 
 }
 
@@ -1093,32 +1139,32 @@ unsigned char buf[2048][2] = {0};
 int cur_buf = 0;
 bool is_pmdg747_loaded(const std::string& filename)
 {
-	
-	std::string upcased;
-	std::transform(filename.begin(), filename.end(), std::back_inserter(upcased), toupper);
-	//it is not fair upcase, but we just need to find latin string
-	if (upcased.rfind("PMDG747-400") == std::string::npos)
-	{
-		return false;
-	}
-	return true;
+
+    std::string upcased;
+    std::transform(filename.begin(), filename.end(), std::back_inserter(upcased), toupper);
+    //it is not fair upcase, but we just need to find latin string
+    if (upcased.rfind("PMDG747-400") == std::string::npos)
+    {
+        return false;
+    }
+    return true;
 }
 }
 
 BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType)
 {
-	quit = 1;
-	return TRUE;
+    quit = 1;
+    return TRUE;
 };
 
 void traceerror(HRESULT hr, LPCWSTR tsz)
 {
-	if (FAILED(hr))
-	{
-		wchar_t tszBuf[1024] = { 0 };
-		swprintf(tszBuf, sizeof(tszBuf)/sizeof(tszBuf[0]), L"%s returned hr = %08X\n", tsz, hr);
-		OutputDebugStringW(tszBuf);
-	}
+    if (FAILED(hr))
+    {
+        wchar_t tszBuf[1024] = { 0 };
+        swprintf(tszBuf, sizeof(tszBuf)/sizeof(tszBuf[0]), L"%s returned hr = %08X\n", tsz, hr);
+        OutputDebugStringW(tszBuf);
+    }
 }
 
 
@@ -1167,8 +1213,8 @@ returns pressed_knob_input(short & dialcontext, short dialval, unsigned short de
 }
 
 
-returns process_knob(int & unpressedval, short& dialcontext, short dialval, 
-        unsigned long prev_state, unsigned long new_state, unsigned long mask, 
+returns process_knob(int & unpressedval, short& dialcontext, short dialval,
+        unsigned long prev_state, unsigned long new_state, unsigned long mask,
         std::chrono::high_resolution_clock::time_point& press_tp,
         unsigned short delta, unsigned short delta2)
 {
@@ -1180,11 +1226,11 @@ returns process_knob(int & unpressedval, short& dialcontext, short dialval,
     {
         if (std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::high_resolution_clock::now()
-                    - press_tp).count() > hold_key_time_ms)
+                    - press_tp).count() > controls_block::hold_key_time_ms)
         {
             ret = Hold;
         }
-        ret = pressed_knob_input(dialcontext, dialval, delta); 
+        ret = pressed_knob_input(dialcontext, dialval, delta);
     }
     else if ( !last_press && !new_press) // not pressed
     {
@@ -1220,21 +1266,21 @@ returns process_knob(int & unpressedval, short& dialcontext, short dialval,
 void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
 {
     static efis_input_context ctx;
-	ctr.state.nav_l = ((r->wSwitchState) & GFEFIS_SW_10)?1:(((r->wSwitchState) & GFEFIS_SW_9)?2:0);
-	ctr.state.nav_r = ((r->wSwitchState) & GFEFIS_SW_12)?1:(((r->wSwitchState) & GFEFIS_SW_11)?2:0);
-	ctr.state.nd_mode = (r->bSelectors & GFEFIS_MASK_SEL1);
-	ctr.state.nd_range = ((r->bSelectors & GFEFIS_MASK_SEL2) >> 4) + 1;
+    ctr.state.nav_l = ((r->wSwitchState) & GFEFIS_SW_10)?1:(((r->wSwitchState) & GFEFIS_SW_9)?2:0);
+    ctr.state.nav_r = ((r->wSwitchState) & GFEFIS_SW_12)?1:(((r->wSwitchState) & GFEFIS_SW_11)?2:0);
+    ctr.state.nd_mode = (r->bSelectors & GFEFIS_MASK_SEL1);
+    ctr.state.nd_range = ((r->bSelectors & GFEFIS_MASK_SEL2) >> 4) + 1;
 
     unsigned short pressed = (ctx.wSwitchState ^ r->wSwitchState) & (r->wSwitchState);
     unsigned short released = (ctx.wSwitchState ^ r->wSwitchState) & ~(r->wSwitchState);
 
     ctr.cmd.wxr = (pressed & GFEFIS_SW_7)?1:0;
-	ctr.cmd.sta = (pressed & GFEFIS_SW_6)?1:0;
-	ctr.cmd.wpt = (pressed & GFEFIS_SW_5)?1:0;
-	ctr.cmd.arpt = (pressed & GFEFIS_SW_4)?1:0;
-	ctr.cmd.data = (pressed & GFEFIS_SW_3)?1:0;
-	ctr.cmd.pos = (pressed & GFEFIS_SW_2)?1:0;
-	ctr.cmd.terr = (pressed & GFEFIS_SW_1)?1:0;
+    ctr.cmd.sta = (pressed & GFEFIS_SW_6)?1:0;
+    ctr.cmd.wpt = (pressed & GFEFIS_SW_5)?1:0;
+    ctr.cmd.arpt = (pressed & GFEFIS_SW_4)?1:0;
+    ctr.cmd.data = (pressed & GFEFIS_SW_3)?1:0;
+    ctr.cmd.pos = (pressed & GFEFIS_SW_2)?1:0;
+    ctr.cmd.terr = (pressed & GFEFIS_SW_1)?1:0;
 
 
     const unsigned short delta = 3;
@@ -1273,7 +1319,7 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
     {
         if (std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::high_resolution_clock::now()
-                    - ctx.mtrs_pressed).count() > hold_key_time_ms)
+                    - ctx.mtrs_pressed).count() > controls_block::hold_key_time_ms)
         {
             ctr.cmd.tfc = 1;
         }
@@ -1287,7 +1333,7 @@ void fill_efis_data(controls_block& ctr, LPGFEFISINPUTREPORT r)
     {
         if (std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::high_resolution_clock::now()
-                    - ctx.fpv_pressed).count() > hold_key_time_ms)
+                    - ctx.fpv_pressed).count() > controls_block::hold_key_time_ms)
         {
             ctr.cmd.ctr = 1;
         }
@@ -1303,33 +1349,33 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 {
     static mcppro_input_context ctx;
 
-	ctr.state.ap_disengage = ((r->ulSwitchState) & GFMCPPRO_SW_23)?1:0;
-	ctr.state.at_arm = ((r->ulSwitchState) & GFMCPPRO_SW_5)?1:0;
-	ctr.state.fd_l = ((r->ulSwitchState) & GFMCPPRO_SW_15)?1:0;
-	ctr.state.fd_r = ((r->ulSwitchState) & GFMCPPRO_SW_24)?1:0;
+    ctr.state.ap_disengage = ((r->ulSwitchState) & GFMCPPRO_SW_23)?1:0;
+    ctr.state.at_arm = ((r->ulSwitchState) & GFMCPPRO_SW_5)?1:0;
+    ctr.state.fd_l = ((r->ulSwitchState) & GFMCPPRO_SW_15)?1:0;
+    ctr.state.fd_r = ((r->ulSwitchState) & GFMCPPRO_SW_24)?1:0;
 
     unsigned long pressed = (ctx.ulSwitchState ^ r->ulSwitchState) & (r->ulSwitchState);
     unsigned long released = (ctx.ulSwitchState ^ r->ulSwitchState) & ~(r->ulSwitchState);
 
 
-	ctr.cmd.vnav = (pressed & GFMCPPRO_SW_1)?1:0;
-	ctr.cmd.lnav = (pressed & GFMCPPRO_SW_2)?1:0;
-	ctr.cmd.cmd_l = (pressed & GFMCPPRO_SW_3)?1:0;
-	ctr.cmd.cmd_r = (pressed & GFMCPPRO_SW_4)?1:0;
-	ctr.cmd.cmd_c = (pressed & GFMCPPRO_SW_10)?1:0;
-	ctr.cmd.c_o = (pressed & GFMCPPRO_SW_6)?1:0;
-	ctr.cmd.spd_intv = ((pressed & GFMCPPRO_SW_7) || (pressed & GFMCPPRO_SW_12))?1:0;
+    ctr.cmd.vnav = (pressed & GFMCPPRO_SW_1)?1:0;
+    ctr.cmd.lnav = (pressed & GFMCPPRO_SW_2)?1:0;
+    ctr.cmd.cmd_l = (pressed & GFMCPPRO_SW_3)?1:0;
+    ctr.cmd.cmd_r = (pressed & GFMCPPRO_SW_4)?1:0;
+    ctr.cmd.cmd_c = (pressed & GFMCPPRO_SW_10)?1:0;
+    ctr.cmd.c_o = (pressed & GFMCPPRO_SW_6)?1:0;
+    ctr.cmd.spd_intv = ((pressed & GFMCPPRO_SW_7) || (pressed & GFMCPPRO_SW_12))?1:0;
 
-	ctr.cmd.vorloc = (pressed & GFMCPPRO_SW_8)?1:0;
-	ctr.cmd.alt_intv = ((pressed & GFMCPPRO_SW_9) || (pressed & GFMCPPRO_SW_14))?1:0;
+    ctr.cmd.vorloc = (pressed & GFMCPPRO_SW_8)?1:0;
+    ctr.cmd.alt_intv = ((pressed & GFMCPPRO_SW_9) || (pressed & GFMCPPRO_SW_14))?1:0;
 
-	ctr.cmd.thr = (pressed & GFMCPPRO_SW_16)?1:0;
-	ctr.cmd.spd = (pressed & GFMCPPRO_SW_17)?1:0;
-	ctr.cmd.flch = (pressed & GFMCPPRO_SW_18)?1:0;
-	ctr.cmd.hdghld = (pressed & GFMCPPRO_SW_19)?1:0;
-	ctr.cmd.app = (pressed & GFMCPPRO_SW_20)?1:0;
-	ctr.cmd.althld = (pressed & GFMCPPRO_SW_21)?1:0;
-	ctr.cmd.vs = (pressed & GFMCPPRO_SW_22)?1:0;
+    ctr.cmd.thr = (pressed & GFMCPPRO_SW_16)?1:0;
+    ctr.cmd.spd = (pressed & GFMCPPRO_SW_17)?1:0;
+    ctr.cmd.flch = (pressed & GFMCPPRO_SW_18)?1:0;
+    ctr.cmd.hdghld = (pressed & GFMCPPRO_SW_19)?1:0;
+    ctr.cmd.app = (pressed & GFMCPPRO_SW_20)?1:0;
+    ctr.cmd.althld = (pressed & GFMCPPRO_SW_21)?1:0;
+    ctr.cmd.vs = (pressed & GFMCPPRO_SW_22)?1:0;
 
     switch( press_knob::process_knob(ctr.cmd.hdg_knob, ctx.nCDialVal, r->nCDialVal,
             ctx.ulSwitchState, r->ulSwitchState, GFMCPPRO_SW_13, ctx.C_pressed, 2, 1))
@@ -1337,8 +1383,8 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
         case press_knob::Increment: ctr.cmd.bank_inc = 1; break;
         case press_knob::Decrement: ctr.cmd.bank_dec = 1; break;
         case press_knob::Released: ctr.cmd.hdgsel = 1; break;
-		case press_knob::ReleasedAfterRotate: ctr.cmd.bank_change_end = 1; break;
-   		case press_knob::Hold: ctr.cmd.bank_change_start = 1; break;
+        case press_knob::ReleasedAfterRotate: ctr.cmd.bank_change_end = 1; break;
+           case press_knob::Hold: ctr.cmd.bank_change_start = 1; break;
         default:
             ;
     }
@@ -1354,71 +1400,71 @@ void fill_mcp_data(controls_block& ctr, LPGFMCPPROINPUTREPORT r)
 
 static BOOL InputCallback( GFDEV_HW_TYPE HWType, unsigned short wParam, LPGFINPUTREPORTTYPE lParam )
 {
-	BOOL bInputProcessed = FALSE;	
-	// any streams here is not thread safe, this callback running in separate thread
-	if (NULL != lParam) // sanity check...
-	{
-		int gfmcppro_num = -1;
-		int gfefis_num = -1;
-		global_controls_info.get_devs(gfmcppro_num, gfefis_num);
+    BOOL bInputProcessed = FALSE;
+    // any streams here is not thread safe, this callback running in separate thread
+    if (NULL != lParam) // sanity check...
+    {
+        int gfmcppro_num = -1;
+        int gfefis_num = -1;
+        global_controls_info.get_devs(gfmcppro_num, gfefis_num);
 
-		if (GFDEVHWTYPE_GFMCPPRO == HWType && wParam == gfmcppro_num)
-		{
-			LPGFMCPPROINPUTREPORT r = reinterpret_cast<LPGFMCPPROINPUTREPORT>(lParam);
-/*			logger::lout << "M" << std::setw(8) << r->nADialVal << std::setw(8) << r->nBDialVal << std::setw(8) << r->nCDialVal
-				<< std::setw(8) << r->nDDialVal << std::setw(8) << r->nEDialVal << std::setw(8) << r->nFDialVal << std::hex << std::setw(10) << r->ulSwitchState << std::endl;*/
-			controls_block& ctr = global_controls_info.get_current_for_write();
-			fill_mcp_data(ctr, r);
-			global_controls_info.input_processed();
-			bInputProcessed = TRUE;
-		}
-		else if (GFDEVHWTYPE_GFEFIS == HWType  && wParam == gfefis_num)
-		{
-			LPGFEFISINPUTREPORT r = reinterpret_cast<LPGFEFISINPUTREPORT>(lParam);
-/*			logger::lout << "E" << std::setw(8) << r->nADialVal << std::setw(8) << r->nBDialVal << std::setw(8) << std::hex << int(r->bSelectors)
-				<< std::hex << std::setw(10) << r->wSwitchState << std::endl;*/
-			controls_block& ctr = global_controls_info.get_current_for_write();
-			fill_efis_data(ctr, r);
-			global_controls_info.input_processed();
-			bInputProcessed = TRUE;
-		}
-	}
+        if (GFDEVHWTYPE_GFMCPPRO == HWType && wParam == gfmcppro_num)
+        {
+            LPGFMCPPROINPUTREPORT r = reinterpret_cast<LPGFMCPPROINPUTREPORT>(lParam);
+/*            logger::lout << "M" << std::setw(8) << r->nADialVal << std::setw(8) << r->nBDialVal << std::setw(8) << r->nCDialVal
+                << std::setw(8) << r->nDDialVal << std::setw(8) << r->nEDialVal << std::setw(8) << r->nFDialVal << std::hex << std::setw(10) << r->ulSwitchState << std::endl;*/
+            controls_block& ctr = global_controls_info.get_current_for_write();
+            fill_mcp_data(ctr, r);
+            global_controls_info.input_processed();
+            bInputProcessed = TRUE;
+        }
+        else if (GFDEVHWTYPE_GFEFIS == HWType  && wParam == gfefis_num)
+        {
+            LPGFEFISINPUTREPORT r = reinterpret_cast<LPGFEFISINPUTREPORT>(lParam);
+/*            logger::lout << "E" << std::setw(8) << r->nADialVal << std::setw(8) << r->nBDialVal << std::setw(8) << std::hex << int(r->bSelectors)
+                << std::hex << std::setw(10) << r->wSwitchState << std::endl;*/
+            controls_block& ctr = global_controls_info.get_current_for_write();
+            fill_efis_data(ctr, r);
+            global_controls_info.input_processed();
+            bInputProcessed = TRUE;
+        }
+    }
 
-	return bInputProcessed;
+    return bInputProcessed;
 }
 
 
 void GFInitialUpdate(int gfmcppro_num, int gfefis_num)
 {
-	controls_block& ctr = global_controls_info.get_current_for_write();
-	if (gfmcppro_num >= 0)
-	{
-		GFMCPPROINPUTREPORT r;
-		GFMCPPro_GetControlVals( 
-			gfmcppro_num, &(r.nADialVal), &(r.nBDialVal), &(r.nCDialVal), &(r.nDDialVal), &(r.nEDialVal), &(r.nFDialVal), &(r.ulSwitchState));
-		fill_mcp_data(ctr, &r);
-	}
-	if (gfefis_num >= 0)
-	{
-		GFEFISINPUTREPORT r;
-		GFEFIS_GetControlVals( gfefis_num, &(r.nADialVal), &(r.nBDialVal), &(r.wSwitchState), &(r.bSelectors ));
-		fill_efis_data(ctr, &r);
-	}
-	global_controls_info.input_processed();
+    controls_block& ctr = global_controls_info.get_current_for_write();
+    if (gfmcppro_num >= 0)
+    {
+        GFMCPPROINPUTREPORT r;
+        GFMCPPro_GetControlVals(
+            gfmcppro_num, &(r.nADialVal), &(r.nBDialVal), &(r.nCDialVal), &(r.nDDialVal), &(r.nEDialVal), &(r.nFDialVal), &(r.ulSwitchState));
+        fill_mcp_data(ctr, &r);
+    }
+    if (gfefis_num >= 0)
+    {
+        GFEFISINPUTREPORT r;
+        GFEFIS_GetControlVals( gfefis_num, &(r.nADialVal), &(r.nBDialVal), &(r.wSwitchState), &(r.bSelectors ));
+        fill_efis_data(ctr, &r);
+    }
+    global_controls_info.input_processed();
 }
 
 void remove_menu(HANDLE hSimConnect)
 {
-	SimConnect_MenuDeleteItem(hSimConnect, EVENT_MENU_ROOT);
+    SimConnect_MenuDeleteItem(hSimConnect, EVENT_MENU_ROOT);
 }
 void add_menu(HANDLE hSimConnect)
 {
-	remove_menu(hSimConnect);
-	HRESULT hr = SimConnect_MenuAddItem(hSimConnect, "GF<->747 &Interface", EVENT_MENU_ROOT, 0);
-	if (hr == S_OK)
-	{
-		SimConnect_MenuAddSubItem(hSimConnect, EVENT_MENU_ROOT, "&Restart GFDev", EVENT_MENU_RESTART, 0);
-	}
+    remove_menu(hSimConnect);
+    HRESULT hr = SimConnect_MenuAddItem(hSimConnect, "GF<->747 &Interface", EVENT_MENU_ROOT, 0);
+    if (hr == S_OK)
+    {
+        SimConnect_MenuAddSubItem(hSimConnect, EVENT_MENU_ROOT, "&Restart GFDev", EVENT_MENU_RESTART, 0);
+    }
 }
 
 
@@ -1429,7 +1475,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
     const SIMCONNECT_OBJECT_ID obj = SIMCONNECT_OBJECT_ID_USER;
     const SIMCONNECT_NOTIFICATION_GROUP_ID gid = SIMCONNECT_GROUP_PRIORITY_HIGHEST;
     const SIMCONNECT_EVENT_FLAG flag  = SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY;
-	const controls_state& sim_controls_state = mcppro.sim_controls_state;
+    const controls_state& sim_controls_state = mcppro.sim_controls_state;
     {
         if (gfmcppro_num >= 0)
         {
@@ -1511,8 +1557,8 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
         if (controls.cmd.althld )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressALTHOLD, 0 ,gid , flag );
         if (controls.cmd.vs )
-		    SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressVS, 0 ,gid , flag );
-		if (controls.cmd.cmd_l )
+            SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressVS, 0 ,gid , flag );
+        if (controls.cmd.cmd_l )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressCMDL, 0 ,gid , flag );
         if (controls.cmd.cmd_c )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressCMDC, 0 ,gid , flag );
@@ -1522,25 +1568,25 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressAltIntv, 0 ,gid , flag );
         if (controls.cmd.spd_intv )
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPPressSpdIntv, 0 ,gid , flag );
-		
+
         if (controls.cmd.bank_inc )
         {
-			mcppro.show_bank(true);			
+            mcppro.show_bank(true);
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPIncreaseBankLimiter, 0 ,gid , flag );
         }
         if (controls.cmd.bank_dec )
         {
-			mcppro.show_bank(true);
+            mcppro.show_bank(true);
             SimConnect_TransmitClientEvent( hSimConnect, obj , MCPDecreaseBankLimiter, 0 ,gid , flag );
         }
         if (controls.cmd.bank_change_start )
         {
-			mcppro.show_bank(true);
+            mcppro.show_bank(true);
         }
 
         if (controls.cmd.bank_change_end )
         {
-			mcppro.show_bank(false);
+            mcppro.show_bank(false);
         }
 
         if (controls.cmd.alt_knob)
@@ -1548,7 +1594,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             bool inc = (controls.cmd.alt_knob > 0);
             for (int i = std::abs(controls.cmd.alt_knob); i > 0; --i )
             {
-				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseAlt:MCPDecreaseAlt, 0 ,gid , flag );
+                SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseAlt:MCPDecreaseAlt, 0 ,gid , flag );
             }
         }
 
@@ -1557,7 +1603,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             bool inc = (controls.cmd.hdg_knob > 0);
             for (int i = std::abs(controls.cmd.hdg_knob); i > 0; --i )
             {
-				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseHdg:MCPDecreaseHdg, 0 ,gid , flag );
+                SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseHdg:MCPDecreaseHdg, 0 ,gid , flag );
             }
         }
 
@@ -1566,7 +1612,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             bool inc = (controls.cmd.spd_knob > 0);
             for (int i = std::abs(controls.cmd.spd_knob); i > 0; --i )
             {
-				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseSpd:MCPDecreaseSpd, 0 ,gid , flag );
+                SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseSpd:MCPDecreaseSpd, 0 ,gid , flag );
             }
         }
 
@@ -1575,7 +1621,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             bool inc = (controls.cmd.vs_knob > 0);
             for (int i = std::abs(controls.cmd.vs_knob); i > 0; --i )
             {
-				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseVS:MCPDecreaseVS, 0 ,gid , flag );
+                SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?MCPIncreaseVS:MCPDecreaseVS, 0 ,gid , flag );
             }
         }
 
@@ -1584,7 +1630,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             bool inc = (controls.cmd.mins_knob > 0);
             for (int i = std::abs(controls.cmd.mins_knob); i > 0; --i )
             {
-				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?EFISCaptainIncreaseMINS:EFISCaptainDecreaseMINS, 0 ,gid , flag );
+                SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?EFISCaptainIncreaseMINS:EFISCaptainDecreaseMINS, 0 ,gid , flag );
             }
         }
 
@@ -1593,7 +1639,7 @@ void process_input(HANDLE hSimConnect, const controls_block& controls,  mcppro_d
             bool inc = (controls.cmd.baro_knob > 0);
             for (int i = std::abs(controls.cmd.baro_knob); i > 0; --i )
             {
-				SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?EFISCaptainIncreaseBARO:EFISCaptainDecreaseBARO, 0 ,gid , flag );
+                SimConnect_TransmitClientEvent( hSimConnect, obj , (inc)?EFISCaptainIncreaseBARO:EFISCaptainDecreaseBARO, 0 ,gid , flag );
             }
         }
 
@@ -1606,39 +1652,39 @@ bool process_mcppro(HANDLE hSimConnect, mcppro_display_747& mcppro, controls_inf
 {
     int gfmcppro_num = -1;
     int gfefis_num = -1;
-    	
-	bool plane_reload = false;
-	bool hwchanged = false;
-	switch (pmdg747_loaded)
+
+    bool plane_reload = false;
+    bool hwchanged = false;
+    switch (pmdg747_loaded)
     {
-	    case controls_info::PMDG747_UNLOADED:
+        case controls_info::PMDG747_UNLOADED:
             logger::lout << "747 Unloaded" << std::endl;
-			remove_menu(hSimConnect);
+            remove_menu(hSimConnect);
             GFDev_UnregisterInputCallback();
-			SimConnect_UnsubscribeFromSystemEvent(hSimConnect, EVENT_6HZ);
-			global_controls_info.clear_display();
-		case controls_info::PMDG747_NOTLOADED:
+            SimConnect_UnsubscribeFromSystemEvent(hSimConnect, EVENT_6HZ);
+            global_controls_info.clear_display();
+        case controls_info::PMDG747_NOTLOADED:
             break;
-		case controls_info::PMDG747_JUSTLOADED:
-			logger::lout << "747 loaded" << std::endl;
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "6Hz");
-			add_menu(hSimConnect);
-			plane_reload = true;
-		case controls_info::PMDG747_LOADED:
-			hwchanged = global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num);
-			if (hwchanged || plane_reload)
+        case controls_info::PMDG747_JUSTLOADED:
+            logger::lout << "747 loaded" << std::endl;
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_6HZ, "6Hz");
+            add_menu(hSimConnect);
+            plane_reload = true;
+        case controls_info::PMDG747_LOADED:
+            hwchanged = global_controls_info.get_devs_and_changed(gfmcppro_num, gfefis_num);
+            if (hwchanged || plane_reload)
             {
                 GFInitialUpdate(gfmcppro_num, gfefis_num);
-				mcppro.invalidate();
-				GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input 
-            }            
-			if (global_controls_info.get_new_input())
-			{
-				process_input(hSimConnect, global_controls_info.get_current_for_read(), mcppro, gfmcppro_num, gfefis_num);
-			}
+                mcppro.invalidate();
+                GFDev_RegisterInputCallback(InputCallback); // Tell API to notify us on input
+            }
+            if (global_controls_info.get_new_input())
+            {
+                process_input(hSimConnect, global_controls_info.get_current_for_read(), mcppro, gfmcppro_num, gfefis_num);
+            }
             return true;
         default:
-			logger::lout << "unknown state " << std::endl;
+            logger::lout << "unknown state " << std::endl;
     }
     return false;
 }
@@ -1647,41 +1693,41 @@ bool process_mcppro(HANDLE hSimConnect, mcppro_display_747& mcppro, controls_inf
 namespace
 {
 #ifdef _USRDLL
-	ID bank_var_id = -1;
-	ID yoke_var_id = -1;
-	
+    ID bank_var_id = -1;
+    ID yoke_var_id = -1;
+
 #endif //_USRDLL
 
-	void update_var_id()
-	{
+    void update_var_id()
+    {
 #ifdef _USRDLL
-		bank_var_id = check_named_variable("MCP_BankLimit_Knob_var");
-		yoke_var_id = check_named_variable("yokehide");
+        bank_var_id = check_named_variable("MCP_BankLimit_Knob_var");
+        yoke_var_id = check_named_variable("yokehide");
 #endif //_USRDLL
-	}
+    }
 
-	void yoke_hide()
-	{
+    void yoke_hide()
+    {
 #ifdef _USRDLL
-		if (yoke_var_id >= 0)
-		{
-			set_named_variable_value(yoke_var_id, FLOAT64(1.0));
-		}
+        if (yoke_var_id >= 0)
+        {
+            set_named_variable_value(yoke_var_id, FLOAT64(1.0));
+        }
 #endif
-	}
+    }
 
-	int get_max_bank_value()
-	{
-		int ret = -1;
+    int get_max_bank_value()
+    {
+        int ret = -1;
 #ifdef _USRDLL
-		if (bank_var_id >= 0)
-		{
-			ret = get_named_variable_value(bank_var_id);
-			ret /= 2;
-		}
+        if (bank_var_id >= 0)
+        {
+            ret = static_cast<int>(get_named_variable_value(bank_var_id));
+            ret /= 2;
+        }
 #endif
-		return ret;
-	}
+        return ret;
+    }
 
 }
 
@@ -1690,91 +1736,91 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
     HRESULT hr;
     static mcppro_display_747 mcppro;
     mcppro_display_747 * mcp = &mcppro;
-	HANDLE hSimConnect = reinterpret_cast<HANDLE>(ctxt);
-	//mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747*>(ctxt);
-	bool display_update = false;
-	static int bank_lim = -1;
+    HANDLE hSimConnect = reinterpret_cast<HANDLE>(ctxt);
+    //mcppro_display_747 * mcp = reinterpret_cast<mcppro_display_747*>(ctxt);
+    bool display_update = false;
+    static int bank_lim = -1;
     switch(pData->dwID)
     {
-		case SIMCONNECT_RECV_ID_OPEN:
-		{
-			break;
-		}
+        case SIMCONNECT_RECV_ID_OPEN:
+        {
+            break;
+        }
 
         case SIMCONNECT_RECV_ID_EVENT:
         {
             SIMCONNECT_RECV_EVENT *evt = (SIMCONNECT_RECV_EVENT*)pData;
-			SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)evt;
-			switch(evt->uEventID)
+            SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)evt;
+            switch(evt->uEventID)
             {
                 case EVENT_SIM_START:
-					logger::lout << "SIMSTART" << std::endl;
-					break;
-				case EVENT_SIM_PAUSED:
-					logger::lout << "Paused" << std::endl;
-					break;
-				case EVENT_SIM_UNPAUSED:
-					logger::lout << "Unpaused" << std::endl;
-					update_var_id();
-					global_controls_info.on_unpaused();
+                    logger::lout << "SIMSTART" << std::endl;
                     break;
-				case EVENT_SIM_STOP:
-					logger::lout << "SIMSTOP" << std::endl;
-					break;
-				case EVENT_MENU_RESTART:
-					global_controls_info.on_hardware_changed();
-					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
-						EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
-					break;
-				case EVENT_MENU_ROOT:
-					break;
+                case EVENT_SIM_PAUSED:
+                    logger::lout << "Paused" << std::endl;
+                    break;
+                case EVENT_SIM_UNPAUSED:
+                    logger::lout << "Unpaused" << std::endl;
+                    update_var_id();
+                    global_controls_info.on_unpaused();
+                    break;
+                case EVENT_SIM_STOP:
+                    logger::lout << "SIMSTOP" << std::endl;
+                    break;
+                case EVENT_MENU_RESTART:
+                    global_controls_info.on_hardware_changed();
+                    SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
+                        EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+                    break;
+                case EVENT_MENU_ROOT:
+                    break;
                 case EVENT_6HZ:
-					bank_lim = get_max_bank_value();
-					if (bank_lim >= 0)
-					{
-						mcp->set_bank_lim(bank_lim);						
-					}
-					if (global_controls_info.need_panel_state_update())
-					{
-						yoke_hide();
-						SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
-							EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
-					}
-					display_update = true;
+                    bank_lim = get_max_bank_value();
+                    if (bank_lim >= 0)
+                    {
+                        mcp->set_bank_lim(bank_lim);
+                    }
+                    if (global_controls_info.need_panel_state_update())
+                    {
+                        yoke_hide();
+                        SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
+                            EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+                    }
+                    display_update = true;
                     break;
-				case EVENT_HAS_INPUT:
-					process_mcppro(hSimConnect, mcppro, global_controls_info.get_pmdg747_loaded());
-					break;
-				default:
-				   logger::lout << "EVENT " << evt->uEventID << std::endl;
+                case EVENT_HAS_INPUT:
+                    process_mcppro(hSimConnect, mcppro, global_controls_info.get_pmdg747_loaded());
+                    break;
+                default:
+                   logger::lout << "EVENT " << evt->uEventID << std::endl;
                    break;
             }
             break;
 
         }
 
-		case SIMCONNECT_RECV_ID_CLIENT_DATA:
-		{
-			SIMCONNECT_RECV_CLIENT_DATA *pObjData = (SIMCONNECT_RECV_CLIENT_DATA*)pData;
-            int	count	= 0;
-			BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
+        case SIMCONNECT_RECV_ID_CLIENT_DATA:
+        {
+            SIMCONNECT_RECV_CLIENT_DATA *pObjData = (SIMCONNECT_RECV_CLIENT_DATA*)pData;
+            int    count    = 0;
+            BYTE * pD = reinterpret_cast<BYTE*>(&pObjData->dwData);
 
-			while (count < (int) pObjData->dwDefineCount)
-			{
-				int id = *reinterpret_cast<int*>(pD);
-				pD += sizeof(int);
-				size_t tsize = sizeof(int);
-				if (id == MCPMach)
-				{
-					double val = *reinterpret_cast<double*>(pD);
+            while (count < (int) pObjData->dwDefineCount)
+            {
+                int id = *reinterpret_cast<int*>(pD);
+                pD += sizeof(int);
+                size_t tsize = sizeof(int);
+                if (id == MCPMach)
+                {
+                    double val = *reinterpret_cast<double*>(pD);
                     //logger::lout << id << "/" << val << std::endl;
-					tsize = sizeof(double);
+                    tsize = sizeof(double);
                     mcp->set_mach(val);
-				}
+                }
                 else
-				{
-					int val = *reinterpret_cast<int*>(pD);
-					logger::lout << std::dec << id << "/" << val << std::endl;
+                {
+                    int val = *reinterpret_cast<int*>(pD);
+                    logger::lout << std::dec << id << "/" << val << std::endl;
                     switch (id)
                     {
                         case EFISBaro:
@@ -1814,76 +1860,76 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
                             mcp->sim_controls_state.fd_r         = (val & 0x00000020u) ? 1 : 0;
                             mcp->sim_controls_state.at_arm       = (val & 0x00000040u) ? 1 : 0;
                             mcp->sim_controls_state.ap_disengage = (val & 0x00000008u) ? 1 : 0;
-							global_controls_info.on_panel_state();
+                            global_controls_info.on_panel_state();
                             break;
                         case MACH_IAS:
                             mcp->set_mach_ias(val);
                             break;
-						case AP_BANK_LIM:
-							if (bank_lim < 0)
-							{
-								mcp->set_bank_lim(val);
-							}
-							break;
-						case AP_VS:
-							mcp->set_vs(val);
-							break;
+                        case AP_BANK_LIM:
+                            if (bank_lim < 0)
+                            {
+                                mcp->set_bank_lim(val);
+                            }
+                            break;
+                        case AP_VS:
+                            mcp->set_vs(val);
+                            break;
                         default:
                             break;
                     }
-				}
-				pD += tsize;
-				++count;
-			}
-			display_update = true;
-			break;
-		}
+                }
+                pD += tsize;
+                ++count;
+            }
+            display_update = true;
+            break;
+        }
 
-		case SIMCONNECT_RECV_ID_EVENT_FILENAME:
-		{
-			SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)pData;
-			switch(ev_f->uEventID)
-			{
-				case EVENT_AIRCRAFT_LOADED:
-					global_controls_info.set_pmdg747_loaded(is_pmdg747_loaded(ev_f->szFileName));
-					global_controls_info.onreload();
-					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
-						EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+        case SIMCONNECT_RECV_ID_EVENT_FILENAME:
+        {
+            SIMCONNECT_RECV_EVENT_FILENAME * ev_f = (SIMCONNECT_RECV_EVENT_FILENAME*)pData;
+            switch(ev_f->uEventID)
+            {
+                case EVENT_AIRCRAFT_LOADED:
+                    global_controls_info.set_pmdg747_loaded(is_pmdg747_loaded(ev_f->szFileName));
+                    global_controls_info.onreload();
+                    SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
+                        EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
 
-					logger::lout << "AircraftLoaded" << std::endl;
-					break;
-				case EVENT_FLIGHT_LOADED:
-					global_controls_info.onreload();
-					logger::lout << "FlightLoaded" << std::endl;
-					break;
+                    logger::lout << "AircraftLoaded" << std::endl;
+                    break;
+                case EVENT_FLIGHT_LOADED:
+                    global_controls_info.onreload();
+                    logger::lout << "FlightLoaded" << std::endl;
+                    break;
                 default:
                    break;
             }
             break;
 
         }
-		
-		case SIMCONNECT_RECV_ID_SYSTEM_STATE:
-		{
-			SIMCONNECT_RECV_SYSTEM_STATE * ptr = (SIMCONNECT_RECV_SYSTEM_STATE*)pData;
-			switch(ptr->dwRequestID)
-			{
+
+        case SIMCONNECT_RECV_ID_SYSTEM_STATE:
+        {
+            SIMCONNECT_RECV_SYSTEM_STATE * ptr = (SIMCONNECT_RECV_SYSTEM_STATE*)pData;
+            switch(ptr->dwRequestID)
+            {
                 case EVENT_SIM_START:
                     logger::lout << "START" << std::endl;
                     break;
-				case EVENT_AIRCRAFT_LOADED:
-					global_controls_info.set_pmdg747_loaded(is_pmdg747_loaded(ptr->szString));
-					global_controls_info.onreload();
-					SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
-						EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
-					break;
+                case EVENT_AIRCRAFT_LOADED:
+                    global_controls_info.set_pmdg747_loaded(is_pmdg747_loaded(ptr->szString));
+                    global_controls_info.onreload();
+                    SimConnect_TransmitClientEvent(hSimConnect, SIMCONNECT_OBJECT_ID_USER,
+                        EVENT_HAS_INPUT, 0, SIMCONNECT_GROUP_PRIORITY_HIGHEST, SIMCONNECT_EVENT_FLAG_GROUPID_IS_PRIORITY);
+                    break;
                 default:
-					break;
+                    break;
             }
             break;
-		}
-		
-   
+        }
+
+
 
         case SIMCONNECT_RECV_ID_QUIT:
         {
@@ -1896,16 +1942,16 @@ void CALLBACK MyDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ctxt
             break;
     }
 
-	if (display_update)
-	{
-		int gfmcppro_num = -1;
-		int gfefis_num = -1;
-		global_controls_info.get_devs(gfmcppro_num, gfefis_num);
-		if (gfmcppro_num >= 0)
-		{
-			mcp->update_mcppro(gfmcppro_num);
-		}
-	}
+    if (display_update)
+    {
+        int gfmcppro_num = -1;
+        int gfefis_num = -1;
+        global_controls_info.get_devs(gfmcppro_num, gfefis_num);
+        if (gfmcppro_num >= 0)
+        {
+            mcp->update_mcppro(gfmcppro_num);
+        }
+    }
 
 
 }
@@ -1917,82 +1963,82 @@ void CALLBACK NullDispatchProcPDR(SIMCONNECT_RECV* pData, DWORD cbData, void *ct
 
 int init_stuff(HMODULE hModule, HANDLE& hSimConnect, HANDLE& hSimConnect2)
 {
-	int result = 0;
-	if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
-	{
-		if (SUCCEEDED(SimConnect_Open(&hSimConnect2, "PMDG747GFMcpPro2", NULL, 0, 0, 0)))
-		{
-			result = 0;
-			global_controls_info.init(hModule, hSimConnect, hSimConnect2);
-			map_747_vars(hSimConnect);
-			map_747_events(hSimConnect);
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_PAUSED, "Paused");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-			SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
-			SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
-			const char event_name[] = { "PMDG747Iface.NewInput" };
-			SimConnect_MapClientEventToSimEvent(hSimConnect, EVENT_HAS_INPUT, event_name);
-			SimConnect_MapClientEventToSimEvent(hSimConnect2, EVENT_HAS_INPUT, event_name);
-			SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1, EVENT_HAS_INPUT, TRUE);
+    int result = 0;
+    if (SUCCEEDED(SimConnect_Open(&hSimConnect, "PMDG747GFMcpPro", NULL, 0, 0, 0)))
+    {
+        if (SUCCEEDED(SimConnect_Open(&hSimConnect2, "PMDG747GFMcpPro2", NULL, 0, 0, 0)))
+        {
+            result = 0;
+            global_controls_info.init(hModule, hSimConnect, hSimConnect2);
+            map_747_vars(hSimConnect);
+            map_747_events(hSimConnect);
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_START, "SimStart");
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_STOP, "SimStop");
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_PAUSED, "Paused");
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_SIM_UNPAUSED, "Unpaused");
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+            SimConnect_SubscribeToSystemEvent(hSimConnect, EVENT_FLIGHT_LOADED, "FlightLoaded");
+            SimConnect_RequestSystemState(hSimConnect, EVENT_AIRCRAFT_LOADED, "AircraftLoaded");
+            const char event_name[] = { "PMDG747Iface.NewInput" };
+            SimConnect_MapClientEventToSimEvent(hSimConnect, EVENT_HAS_INPUT, event_name);
+            SimConnect_MapClientEventToSimEvent(hSimConnect2, EVENT_HAS_INPUT, event_name);
+            SimConnect_AddClientEventToNotificationGroup(hSimConnect, GROUP_1, EVENT_HAS_INPUT, TRUE);
 
-		}
-		else
-		{
-			result = 2;
-			SimConnect_Close(hSimConnect);
-		}
-	}
-	else
-	{
-		result = 1;
-	}
-	return result;
+        }
+        else
+        {
+            result = 2;
+            SimConnect_Close(hSimConnect);
+        }
+    }
+    else
+    {
+        result = 1;
+    }
+    return result;
 }
 
 void call_dispatch(HANDLE hSimConnect, HANDLE hSimConnect2)
 {
-	SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
-	SimConnect_CallDispatch(hSimConnect2, NullDispatchProcPDR, NULL);
+    SimConnect_CallDispatch(hSimConnect, MyDispatchProcPDR, hSimConnect);
+    SimConnect_CallDispatch(hSimConnect2, NullDispatchProcPDR, NULL);
 }
 
 int main(int argc, char* argv[])
 {
-	SetConsoleCtrlHandler(ConsoleHandlerRoutine, TRUE);
-	HRESULT hr = NULL;
-	HMODULE hModule = ::GetModuleHandle(NULL);
-	
-	int state = -1;
-	try
-	{
-		HANDLE hSimConnect, hSimConnect2;		
-		state = init_stuff(hModule, hSimConnect, hSimConnect2);		
-		switch (state)
-		{
-		case 0:
-			printf("\nConnected to Flight Simulator!\n");
-			while (0 == quit)
-			{
-				call_dispatch(hSimConnect, hSimConnect2);
-			}
-			break;
-		case 2:
-			printf("Secondary Simconnect connection failed\n");
-			getchar();
-			break;
-		case 1:
-			printf("Simconnect connection failed\n");
-			getchar();
-			break;
-		}	
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << e.what() << std::endl;
-	}
-	return 0;
+    SetConsoleCtrlHandler(ConsoleHandlerRoutine, TRUE);
+    HRESULT hr = NULL;
+    HMODULE hModule = ::GetModuleHandle(NULL);
+
+    int state = -1;
+    try
+    {
+        HANDLE hSimConnect, hSimConnect2;
+        state = init_stuff(hModule, hSimConnect, hSimConnect2);
+        switch (state)
+        {
+        case 0:
+            printf("\nConnected to Flight Simulator!\n");
+            while (0 == quit)
+            {
+                call_dispatch(hSimConnect, hSimConnect2);
+            }
+            break;
+        case 2:
+            printf("Secondary Simconnect connection failed\n");
+            getchar();
+            break;
+        case 1:
+            printf("Simconnect connection failed\n");
+            getchar();
+            break;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
+    return 0;
 }
 
 
@@ -2003,26 +2049,26 @@ int main(int argc, char* argv[])
 HMODULE g_hModule = NULL;
 
 BOOL APIENTRY DllMain(HMODULE hModule,
-	DWORD  ul_reason_for_call,
-	LPVOID lpReserved
-	)
+    DWORD  ul_reason_for_call,
+    LPVOID lpReserved
+    )
 {
-	g_hModule = hModule;
+    g_hModule = hModule;
 
-	
-	switch (ul_reason_for_call)
-	{
-	case DLL_PROCESS_ATTACH:
-		
-		break;
-	case DLL_THREAD_ATTACH:
-		break;
-	case DLL_THREAD_DETACH:
-		break;
-	case DLL_PROCESS_DETACH:
-		break;
-	}
-	return TRUE;
+
+    switch (ul_reason_for_call)
+    {
+    case DLL_PROCESS_ATTACH:
+
+        break;
+    case DLL_THREAD_ATTACH:
+        break;
+    case DLL_THREAD_DETACH:
+        break;
+    case DLL_PROCESS_DETACH:
+        break;
+    }
+    return TRUE;
 }
 
 
@@ -2032,26 +2078,26 @@ PPANELS Panels = NULL;
 
 GAUGESIMPORT    ImportTable =
 {
-	{ 0x0000000F, (PPANELS)NULL },
-	{ 0x00000000, NULL }
+    { 0x0000000F, (PPANELS)NULL },
+    { 0x00000000, NULL }
 };
 
 
 int __stdcall DLLStart(void)
 {
-	if (NULL != Panels)
-	{
-		ImportTable.PANELSentry.fnptr = (PPANELS)Panels;
-	}
-	HANDLE hSimConnect, hSimConnect2;
-	if (g_hModule)
-	{
-		if (!init_stuff(g_hModule, hSimConnect, hSimConnect2))
-		{
-			call_dispatch(hSimConnect, hSimConnect2);
+    if (NULL != Panels)
+    {
+        ImportTable.PANELSentry.fnptr = (PPANELS)Panels;
+    }
+    HANDLE hSimConnect, hSimConnect2;
+    if (g_hModule)
+    {
+        if (!init_stuff(g_hModule, hSimConnect, hSimConnect2))
+        {
+            call_dispatch(hSimConnect, hSimConnect2);
         }
-	}
-	return 0;
+    }
+    return 0;
 }
 
 //
@@ -2059,7 +2105,7 @@ int __stdcall DLLStart(void)
 //
 void __stdcall DLLStop(void)
 {
-	global_controls_info.deinit();
+    global_controls_info.deinit();
 }
 
 
