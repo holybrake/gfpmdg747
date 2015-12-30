@@ -1,30 +1,38 @@
-﻿========================================================================
-    КОНСОЛЬНОЕ ПРИЛОЖЕНИЕ. Обзор проекта gf747
-========================================================================
 
-Это приложение gf747 создано автоматически с помощью мастера приложений.
+Copyright (c) 2015, Alexander Voronkov
+All rights reserved.
 
-В этом файле представлена сводка содержимого всех файлов, входящих в состав приложения gf747.
+This software created as result of SimConnect(r) logfile analysis,
+the author didn't reverse engineer, decompile, disassemble files of any PMDG(r) software.
+The author provides this software as an example but not as any kind of end-user product,
+if you wish to use this software by any way,
+you shall solely assume all legal responsibilities in full.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the above disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software without specific prior written permission.
 
 
-gf747.vcxproj
-    Это основной файл проекта VC++, создаваемый с помощью мастера приложений. Он содержит данные о версии языка Visual C++, использованной для создания файла, а также сведения о платформах, конфигурациях и функциях проекта, выбранных с помощью мастера приложений.
+-------------------------------------------------------------------------------------------------------
+To build this software you will need Microsoft FSX Acceleration SDK and GoFlight SDK v2.21
+The Compiler should implement C++11 standart (Build tested with MSVS2015 Express and MSVS2013 Express )
 
-gf747.vcxproj.filters
-    Это файл фильтров для проектов VC++, созданный с помощью мастера приложений. Он содержит сведения о сопоставлениях между файлами в вашем проекте и фильтрами. Эти сопоставления используются в среде IDE для группировки файлов с одинаковыми расширениями в одном узле (например CPP-файлы сопоставляются с фильтром "Исходные файлы").
-
-gf747.cpp
-    Это основной исходный файл приложения.
-
-/////////////////////////////////////////////////////////////////////////////
-Другие стандартные файлы:
-
-StdAfx.h, StdAfx.cpp
-    Эти файлы используются для построения файла предкомпилированного заголовка (PCH) с именем gf747.pch и файла предкомпилированных типов с именем StdAfx.obj.
-
-/////////////////////////////////////////////////////////////////////////////
-Прочие примечания.
-
-С помощью комментариев «TODO:» в мастере приложений обозначаются фрагменты исходного кода, которые необходимо дополнить или изменить.
-
-/////////////////////////////////////////////////////////////////////////////

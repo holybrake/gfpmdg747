@@ -4,6 +4,7 @@
 //
 
 #pragma once
+#define _CRT_SECURE_NO_WARNINGS // we respect The ISO C++ committee
 
 #include "targetver.h"
 
@@ -13,4 +14,5 @@
 
 
 
-// TODO: Установите здесь ссылки на дополнительные заголовки, требующиеся для программы
+
+
