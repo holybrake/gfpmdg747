@@ -15,14 +15,14 @@ This software implements 2-way interfacing between pmdg-747-400X and GoFlight MC
 This software can be used as standalone executable, or as FSX module,
 module version provides more reliable bank angle switch handling, and hides yoke on start
 
-Pushed rotate of MCPPro Heading encoder works as bank angle switch
-Push without rotate of MCPPro Heading encoder works as HDG Sel
-Pushed rotate of EFIS DH/MDA encoder works as DH/MDA switch
-Pushed rotate of EFIS BARO encoder switches between inHg and HPA
-Long push of EFIS FPV works as CTR 
-Long push of EFIS MTRS works as TFC
-MCPPro CMD A works as CMD L
-MCPPro CMD B works as CMD R
-MCPPro CWS A works as CMD C
+* Pushed rotate of MCPPro Heading encoder works as bank angle switch
+* Push without rotate of MCPPro Heading encoder works as HDG Sel
+* Pushed rotate of EFIS DH/MDA encoder works as DH/MDA switch
+* Pushed rotate of EFIS BARO encoder switches between inHg and HPA
+* Long push of EFIS FPV works as CTR 
+* Long push of EFIS MTRS works as TFC
+* MCPPro CMD A works as CMD L
+* MCPPro CMD B works as CMD R
+* MCPPro CWS A works as CMD C
 
 All other pushes works like their 747-400 counterparts
